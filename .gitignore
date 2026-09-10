@@ -118,4 +118,5 @@ dmypy.json
 .vscode
 
 #Pycharm IDE
-.idea.env.docker
+.idea
+.env.docker
