@@ -23,6 +23,12 @@ const PlusIcon = () => (
   </svg>
 );
 
+const MenuIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+  </svg>
+);
+
 const BeanPattern = () => {
   const beans = [];
   for (let i = 0; i < 40; i++) {
@@ -146,29 +152,41 @@ function relativeTime(isoString) {
   return `${days}d ago`;
 }
 
-function Sidebar({ conversations, activeId, onSelect, onNewChat }) {
+function Sidebar({ conversations, activeId, onSelect, onNewChat, open, onClose }) {
   return (
-    <div className="sidebar">
-      <button className="new-chat-btn" onClick={onNewChat}>
-        <PlusIcon />
-        New chat
-      </button>
-      <div className="conversation-list">
-        {conversations.map((c) => (
-          <button
-            key={c.id}
-            className={`conversation-item ${c.id === activeId ? "active" : ""}`}
-            onClick={() => onSelect(c.id)}
-          >
-            <div className="conversation-title">{c.title || "New conversation"}</div>
-            <div className="conversation-time">{relativeTime(c.created_at)}</div>
-          </button>
-        ))}
-        {conversations.length === 0 && (
-          <p className="sidebar-empty">No past conversations yet.</p>
-        )}
+    <>
+      <div className={`sidebar-overlay ${open ? "visible" : ""}`} onClick={onClose} />
+      <div className={`sidebar ${open ? "open" : ""}`}>
+        <button
+          className="new-chat-btn"
+          onClick={() => {
+            onNewChat();
+            onClose();
+          }}
+        >
+          <PlusIcon />
+          New chat
+        </button>
+        <div className="conversation-list">
+          {conversations.map((c) => (
+            <button
+              key={c.id}
+              className={`conversation-item ${c.id === activeId ? "active" : ""}`}
+              onClick={() => {
+                onSelect(c.id);
+                onClose();
+              }}
+            >
+              <div className="conversation-title">{c.title || "New conversation"}</div>
+              <div className="conversation-time">{relativeTime(c.created_at)}</div>
+            </button>
+          ))}
+          {conversations.length === 0 && (
+            <p className="sidebar-empty">No past conversations yet.</p>
+          )}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -179,6 +197,7 @@ function ChatScreen({ token, onLogout, basePath, isAdmin }) {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const scrollRef = useRef(null);
 
   const authedFetch = (path, options = {}) =>
@@ -277,11 +296,16 @@ function ChatScreen({ token, onLogout, basePath, isAdmin }) {
         activeId={activeId}
         onSelect={setActiveId}
         onNewChat={handleNewChat}
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
       />
 
       <div className="chat-screen">
         <div className="chat-header">
           <div className="brand-mark">
+            <button className="menu-toggle-btn" onClick={() => setSidebarOpen(true)}>
+              <MenuIcon />
+            </button>
             <CupIcon />
             <h1 className="brand">The Daily Grind</h1>
             {isAdmin && <span className="admin-badge">Admin</span>}
