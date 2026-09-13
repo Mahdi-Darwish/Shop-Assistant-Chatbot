@@ -1,0 +1,13 @@
+venv/
+__pycache__/
+*.pyc
+.git/
+.env
+.env.docker
+tests/
+.pytest_cache/
+*.db
+.env.example
+*.dump
+.DS_Store
+__MACOSX/
