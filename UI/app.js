@@ -336,7 +336,7 @@ function ChatScreen({ token, onLogout, basePath, isAdmin }) {
           {messages.map((m, i) => (
             <div key={i} className={`message-row ${m.role}`}>
               {m.role === "assistant" && <div className="avatar"><CupIcon /></div>}
-              <div className="message-bubble">{m.content}</div>
+              <div className="message-bubble" dir="auto">{m.content}</div>
             </div>
           ))}
 
@@ -354,6 +354,7 @@ function ChatScreen({ token, onLogout, basePath, isAdmin }) {
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            dir="auto"
             placeholder={
               isAdmin
                 ? "Add a product, deactivate a user, update a price…"
