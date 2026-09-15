@@ -30,48 +30,33 @@ const ChatBubbleIcon = () => (
 );
 
 /* ---------------------------------------------------------
-   Hero illustration — layered cup + pastry, animated steam
+   Hero photography — real cup + real pastry, gently animated
    --------------------------------------------------------- */
 function HeroArt() {
   return (
-    <svg className="hero-art" viewBox="0 0 360 340" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <linearGradient id="cupGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#3A2418" />
-          <stop offset="100%" stopColor="#231610" />
-        </linearGradient>
-        <linearGradient id="saucerGrad" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor="#F2E4C4" />
-          <stop offset="100%" stopColor="#D8C293" />
-        </linearGradient>
-        <linearGradient id="plateGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#FBF3E2" />
-          <stop offset="100%" stopColor="#E7D8B8" />
-        </linearGradient>
-      </defs>
-
-      {/* back plate with pastry */}
-      <ellipse cx="256" cy="252" rx="88" ry="20" fill="url(#plateGrad)" stroke="#9C7A44" strokeWidth="2" />
-      <path d="M212 238c6-24 30-40 50-40s40 16 46 40c2 8-4 14-12 14h-72c-8 0-14-6-12-14Z" fill="#A8431F" />
-      <path d="M222 238c5-18 22-30 36-30" stroke="#862F13" strokeWidth="3" strokeLinecap="round" fill="none" />
-      <circle cx="240" cy="222" r="4" fill="#6B2438" />
-      <circle cx="258" cy="214" r="3.5" fill="#6B2438" />
-      <circle cx="272" cy="226" r="4" fill="#6B2438" />
-
-      {/* saucer */}
-      <ellipse cx="130" cy="286" rx="112" ry="22" fill="url(#saucerGrad)" stroke="#9C7A44" strokeWidth="2" />
-
-      {/* cup */}
-      <path d="M70 170h120l-10 92a20 20 0 0 1-20 18H100a20 20 0 0 1-20-18l-10-92Z" fill="url(#cupGrad)" />
-      <ellipse cx="130" cy="170" rx="60" ry="14" fill="#4A2E1D" />
-      <ellipse cx="130" cy="170" rx="52" ry="10" fill="#231610" />
-      <path d="M190 182c22-4 36 10 32 28-4 16-24 24-40 18" stroke="#231610" strokeWidth="9" fill="none" strokeLinecap="round" />
-
-      {/* steam */}
-      <path className="steam-wisp" d="M112 150c-6-14 6-18 2-32" stroke="#9C7A44" strokeWidth="4" strokeLinecap="round" fill="none" />
-      <path className="steam-wisp delay" d="M132 150c-6-16 8-20 2-36" stroke="#9C7A44" strokeWidth="4" strokeLinecap="round" fill="none" />
-      <path className="steam-wisp delay2" d="M152 150c-6-14 6-18 2-32" stroke="#9C7A44" strokeWidth="4" strokeLinecap="round" fill="none" />
-    </svg>
+    <div className="hero-art">
+      <div className="hero-photo hero-photo-main">
+        <img
+          src="https://images.unsplash.com/photo-1512568400610-62da28bc8a13?auto=format&fit=crop&w=1000&q=80"
+          alt="Cappuccino with latte art resting in a bed of fresh roasted coffee beans"
+          loading="eager"
+          decoding="async"
+        />
+        <div className="hero-steam" aria-hidden="true">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+      </div>
+      <div className="hero-photo hero-photo-card">
+        <img
+          src="https://images.unsplash.com/photo-1678303054606-9247ec5ca401?auto=format&fit=crop&w=600&q=80"
+          alt="A beautifully plated dessert"
+          loading="lazy"
+          decoding="async"
+        />
+      </div>
+    </div>
   );
 }
 
@@ -87,7 +72,6 @@ function Nav({ isAuthed, isAdmin, onLogin, onSignup, onLogout }) {
           The Daily Grind
         </a>
         <div className="nav-links">
-          <a href="#menu">Menu</a>
           <a href="#story">Our story</a>
         </div>
         <div className="nav-auth">
@@ -137,6 +121,8 @@ function Hero({ onOpenChat, onSignup }) {
 function MenuPreview() {
   const [products, setProducts] = useState(null);
   const [error, setError] = useState(false);
+  const [inView, setInView] = useState(false);
+  const gridRef = useRef(null);
 
   useEffect(() => {
     fetch(`${API_BASE}/products`)
@@ -148,13 +134,29 @@ function MenuPreview() {
       .catch(() => setError(true));
   }, []);
 
+  useEffect(() => {
+    const el = gridRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setInView(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.15 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [products, error]);
+
   return (
     <div className="site menu-section" id="menu">
       <div className="section-head">
         <h2>What's fresh today</h2>
         <p>Pulled straight from the counter — ask the assistant if you want the full list or something specific.</p>
       </div>
-      <div className="menu-grid">
+      <div ref={gridRef} className={`menu-grid ${inView ? "in-view" : ""}`}>
         {error && <div className="menu-error">Couldn't load the menu right now — try asking the assistant instead.</div>}
         {!error && products === null && <div className="menu-empty">Menu's brewing — one moment.</div>}
         {!error && products && products.length === 0 && (
@@ -176,9 +178,28 @@ function MenuPreview() {
    Story
    --------------------------------------------------------- */
 function Story() {
+  const [inView, setInView] = useState(false);
+  const innerRef = useRef(null);
+
+  useEffect(() => {
+    const el = innerRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setInView(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.2 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <div className="story" id="story">
-      <div className="site story-inner">
+      <div ref={innerRef} className={`site story-inner ${inView ? "in-view" : ""}`}>
         <div>
           <h2>Roasted here, not shipped in.</h2>
           <p>
