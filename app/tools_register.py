@@ -25,6 +25,12 @@ USER_SCOPED_TOOLS = {
     "get_user_orders",
     "clear_cart",
 }
+guest_available_tools = {
+    'get_products':tool_get_products,
+    'search_product_by_name':tool_search_product_by_name,
+    'get_products_by_max_price':tool_get_products_by_max_price,
+    'get_products_by_min_price':tool_get_products_by_min_price,
+}
 
 admin_available_tools = {
     "add_product": tool_add_product,

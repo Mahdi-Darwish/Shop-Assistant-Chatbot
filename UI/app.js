@@ -1,7 +1,5 @@
 const { useState, useEffect, useRef } = React;
 
-// Local development works immediately. After creating the Render backend,
-// replace the production URL below with the exact Render API URL.
 const API_BASE =
   window.location.hostname === "localhost" ||
   window.location.hostname === "127.0.0.1" ||
@@ -9,46 +7,213 @@ const API_BASE =
     ? "http://localhost:8000"
     : "https://shop-assistant-chatbot.onrender.com";
 
+/* ---------------------------------------------------------
+   Icons
+   --------------------------------------------------------- */
 const CupIcon = ({ className }) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path d="M4 8h13v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V8Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/>
     <path d="M17 9.5h1.5a2.5 2.5 0 0 1 0 5H17" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-    <path d="M8 4c-.6.7-.6 1.3 0 2M11.5 4c-.6.7-.6 1.3 0 2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
   </svg>
 );
 
-const PlusIcon = () => (
+const CloseIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+    <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
   </svg>
 );
 
-const MenuIcon = () => (
+const ChatBubbleIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+    <path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9l-4 4v-4H6a2 2 0 0 1-2-2V6Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round"/>
   </svg>
 );
 
-const BeanPattern = () => {
-  const beans = [];
-  for (let i = 0; i < 40; i++) {
-    const x = (i * 97) % 800;
-    const y = (i * 149) % 600;
-    const r = 14 + (i % 3) * 4;
-    beans.push(
-      <ellipse key={i} cx={x} cy={y} rx={r} ry={r * 1.5} fill="#FBF3E7"
-        transform={`rotate(${(x * 7) % 360} ${x} ${y})`} />
-    );
-  }
+/* ---------------------------------------------------------
+   Hero illustration — layered cup + pastry, animated steam
+   --------------------------------------------------------- */
+function HeroArt() {
   return (
-    <svg className="bean-pattern" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid slice">
-      {beans}
+    <svg className="hero-art" viewBox="0 0 360 340" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="cupGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#3A2418" />
+          <stop offset="100%" stopColor="#231610" />
+        </linearGradient>
+        <linearGradient id="saucerGrad" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="#F2E4C4" />
+          <stop offset="100%" stopColor="#D8C293" />
+        </linearGradient>
+        <linearGradient id="plateGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#FBF3E2" />
+          <stop offset="100%" stopColor="#E7D8B8" />
+        </linearGradient>
+      </defs>
+
+      {/* back plate with pastry */}
+      <ellipse cx="256" cy="252" rx="88" ry="20" fill="url(#plateGrad)" stroke="#9C7A44" strokeWidth="2" />
+      <path d="M212 238c6-24 30-40 50-40s40 16 46 40c2 8-4 14-12 14h-72c-8 0-14-6-12-14Z" fill="#A8431F" />
+      <path d="M222 238c5-18 22-30 36-30" stroke="#862F13" strokeWidth="3" strokeLinecap="round" fill="none" />
+      <circle cx="240" cy="222" r="4" fill="#6B2438" />
+      <circle cx="258" cy="214" r="3.5" fill="#6B2438" />
+      <circle cx="272" cy="226" r="4" fill="#6B2438" />
+
+      {/* saucer */}
+      <ellipse cx="130" cy="286" rx="112" ry="22" fill="url(#saucerGrad)" stroke="#9C7A44" strokeWidth="2" />
+
+      {/* cup */}
+      <path d="M70 170h120l-10 92a20 20 0 0 1-20 18H100a20 20 0 0 1-20-18l-10-92Z" fill="url(#cupGrad)" />
+      <ellipse cx="130" cy="170" rx="60" ry="14" fill="#4A2E1D" />
+      <ellipse cx="130" cy="170" rx="52" ry="10" fill="#231610" />
+      <path d="M190 182c22-4 36 10 32 28-4 16-24 24-40 18" stroke="#231610" strokeWidth="9" fill="none" strokeLinecap="round" />
+
+      {/* steam */}
+      <path className="steam-wisp" d="M112 150c-6-14 6-18 2-32" stroke="#9C7A44" strokeWidth="4" strokeLinecap="round" fill="none" />
+      <path className="steam-wisp delay" d="M132 150c-6-16 8-20 2-36" stroke="#9C7A44" strokeWidth="4" strokeLinecap="round" fill="none" />
+      <path className="steam-wisp delay2" d="M152 150c-6-14 6-18 2-32" stroke="#9C7A44" strokeWidth="4" strokeLinecap="round" fill="none" />
     </svg>
   );
-};
+}
 
-function AuthScreen({ onAuthenticated }) {
-  const [mode, setMode] = useState("login");
+/* ---------------------------------------------------------
+   Nav
+   --------------------------------------------------------- */
+function Nav({ isAuthed, isAdmin, onLogin, onSignup, onLogout }) {
+  return (
+    <div className="nav">
+      <div className="nav-inner">
+        <a className="wordmark" href="#top">
+          <CupIcon />
+          The Daily Grind
+        </a>
+        <div className="nav-links">
+          <a href="#menu">Menu</a>
+          <a href="#story">Our story</a>
+        </div>
+        <div className="nav-auth">
+          {isAuthed ? (
+            <div className="account-pill">
+              {isAdmin && <span className="admin-tag">Admin</span>}
+              <button className="btn btn-ghost" onClick={onLogout}>Log out</button>
+            </div>
+          ) : (
+            <>
+              <button className="btn btn-ghost" onClick={onLogin}>Log in</button>
+              <button className="btn btn-solid" onClick={onSignup}>Sign up</button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------
+   Hero
+   --------------------------------------------------------- */
+function Hero({ onOpenChat, onSignup }) {
+  return (
+    <div className="site hero" id="top">
+      <div className="hero-copy">
+        <h1>Coffee that's actually worth the walk.</h1>
+        <p>
+          Small-batch roasts, a pastry case that empties out by noon, and a
+          menu assistant sitting in the corner of this page if you'd rather
+          just ask what's good today.
+        </p>
+        <div className="hero-actions">
+          <button className="btn btn-solid" onClick={onOpenChat}>Ask about the menu</button>
+          <button className="hero-login-hint" onClick={onSignup}>Create an account to order</button>
+        </div>
+      </div>
+      <HeroArt />
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------
+   Menu preview — live from GET /products
+   --------------------------------------------------------- */
+function MenuPreview() {
+  const [products, setProducts] = useState(null);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/products`)
+      .then((r) => {
+        if (!r.ok) throw new Error();
+        return r.json();
+      })
+      .then(setProducts)
+      .catch(() => setError(true));
+  }, []);
+
+  return (
+    <div className="site menu-section" id="menu">
+      <div className="section-head">
+        <h2>What's fresh today</h2>
+        <p>Pulled straight from the counter — ask the assistant if you want the full list or something specific.</p>
+      </div>
+      <div className="menu-grid">
+        {error && <div className="menu-error">Couldn't load the menu right now — try asking the assistant instead.</div>}
+        {!error && products === null && <div className="menu-empty">Menu's brewing — one moment.</div>}
+        {!error && products && products.length === 0 && (
+          <div className="menu-empty">Nothing on the counter yet — check back soon.</div>
+        )}
+        {!error && products && products.slice(0, 8).map((p) => (
+          <div className="menu-card" key={p.id}>
+            <h3>{p.name}</h3>
+            <p className="desc">{p.description}</p>
+            <div className="price">${p.price.toFixed(2)}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------
+   Story
+   --------------------------------------------------------- */
+function Story() {
+  return (
+    <div className="story" id="story">
+      <div className="site story-inner">
+        <div>
+          <h2>Roasted here, not shipped in.</h2>
+          <p>
+            We roast in small batches twice a week, pull every shot to
+            order, and bake the pastry case fresh each morning — nothing
+            sits under glass longer than a day. If you're not sure what
+            to get, the assistant in the corner knows the counter better
+            than most of our regulars.
+          </p>
+        </div>
+        <div className="story-stat">
+          <span className="num">6am – 7pm</span>
+          <span className="label">Open every day of the week</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------
+   Footer
+   --------------------------------------------------------- */
+function Footer() {
+  return (
+    <div className="site footer">
+      <span>The Daily Grind — 14 Miller Street</span>
+      <span>Menu, orders, and account all live in the chat, bottom right.</span>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------
+   Auth modal
+   --------------------------------------------------------- */
+function AuthModal({ mode, onClose, onAuthenticated, onSwitchMode }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -91,12 +256,31 @@ function AuthScreen({ onAuthenticated }) {
   }
 
   return (
-    <div className="auth-screen">
-      <BeanPattern />
-      <div className="auth-card">
-        <CupIcon className="cup-mark" />
-        <h1 className="brand">The Daily Grind</h1>
-        <p className="tagline">Coffee, dessert, and a little help deciding.</p>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}><CloseIcon /></button>
+
+        <div className="modal-tabs">
+          <button
+            className={`modal-tab ${mode === "login" ? "active" : ""}`}
+            onClick={() => onSwitchMode("login")}
+          >
+            Log in
+          </button>
+          <button
+            className={`modal-tab ${mode === "signup" ? "active" : ""}`}
+            onClick={() => onSwitchMode("signup")}
+          >
+            Sign up
+          </button>
+        </div>
+
+        <h2>{mode === "login" ? "Welcome back" : "Create your account"}</h2>
+        <p className="modal-sub">
+          {mode === "login"
+            ? "Log in to order, track it, and pick up where you left off."
+            : "Takes a few seconds — you'll be ordering right after."}
+        </p>
 
         {error && <div className="error-banner">{error}</div>}
 
@@ -124,81 +308,33 @@ function AuthScreen({ onAuthenticated }) {
             </>
           )}
 
-          <button className="btn-primary" type="submit" disabled={loading}>
+          <button className="btn btn-solid" type="submit" disabled={loading}>
             {loading ? "Please wait…" : mode === "login" ? "Log in" : "Sign up"}
           </button>
         </form>
-
-        <div className="switch-mode">
-          {mode === "login" ? (
-            <>New here? <button onClick={() => { setMode("signup"); setError(""); }}>Create an account</button></>
-          ) : (
-            <>Already have an account? <button onClick={() => { setMode("login"); setError(""); }}>Log in</button></>
-          )}
-        </div>
       </div>
     </div>
   );
 }
 
-function relativeTime(isoString) {
-  const diff = Date.now() - new Date(isoString).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
-
-function Sidebar({ conversations, activeId, onSelect, onNewChat, open, onClose }) {
-  return (
-    <>
-      <div className={`sidebar-overlay ${open ? "visible" : ""}`} onClick={onClose} />
-      <div className={`sidebar ${open ? "open" : ""}`}>
-        <button
-          className="new-chat-btn"
-          onClick={() => {
-            onNewChat();
-            onClose();
-          }}
-        >
-          <PlusIcon />
-          New chat
-        </button>
-        <div className="conversation-list">
-          {conversations.map((c) => (
-            <button
-              key={c.id}
-              className={`conversation-item ${c.id === activeId ? "active" : ""}`}
-              onClick={() => {
-                onSelect(c.id);
-                onClose();
-              }}
-            >
-              <div className="conversation-title">{c.title || "New conversation"}</div>
-              <div className="conversation-time">{relativeTime(c.created_at)}</div>
-            </button>
-          ))}
-          {conversations.length === 0 && (
-            <p className="sidebar-empty">No past conversations yet.</p>
-          )}
-        </div>
-      </div>
-    </>
-  );
-}
-
-function ChatScreen({ token, onLogout, basePath, isAdmin }) {
+/* ---------------------------------------------------------
+   Chat widget — guest (read-only) or authenticated (full)
+   --------------------------------------------------------- */
+function ChatWidget({ token, isAdmin, onRequireAuth, openSignal }) {
+  const [open, setOpen] = useState(false);
+  const [guestMessages, setGuestMessages] = useState([]);
   const [conversations, setConversations] = useState([]);
   const [activeId, setActiveId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const scrollRef = useRef(null);
+
+  useEffect(() => {
+    if (openSignal > 0) setOpen(true);
+  }, [openSignal]);
+
+  const basePath = isAdmin ? "/admin" : "";
 
   const authedFetch = (path, options = {}) =>
     fetch(`${API_BASE}${path}`, {
@@ -210,31 +346,26 @@ function ChatScreen({ token, onLogout, basePath, isAdmin }) {
       },
     });
 
-  async function loadConversations(selectId) {
+  async function loadConversations() {
     const response = await authedFetch(`${basePath}/conversations`);
-    if (response.status === 401) return onLogout();
+    if (!response.ok) return;
     const data = await response.json();
     setConversations(data);
-
-    if (selectId) {
-      setActiveId(selectId);
-    } else if (data.length > 0) {
-      setActiveId(data[0].id); // most recent
+    if (data.length > 0) {
+      setActiveId(data[0].id);
     } else {
-      await handleNewChat(data);
+      await handleNewChat();
     }
   }
 
   async function loadMessages(conversationId) {
     const response = await authedFetch(`${basePath}/conversations/${conversationId}/messages`);
-    if (response.status === 401) return onLogout();
     const data = await response.json();
     setMessages(response.ok ? data : []);
   }
 
   async function handleNewChat() {
     const response = await authedFetch(`${basePath}/conversations`, { method: "POST" });
-    if (response.status === 401) return onLogout();
     const conversation = await response.json();
     setConversations((prev) => [conversation, ...prev]);
     setActiveId(conversation.id);
@@ -242,46 +373,55 @@ function ChatScreen({ token, onLogout, basePath, isAdmin }) {
   }
 
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      await loadConversations();
-      setLoading(false);
-    })();
-  }, []);
+    if (open && token) loadConversations();
+    if (open && !token) setGuestMessages((m) => m);
+  }, [open, token]);
 
   useEffect(() => {
-    if (activeId) loadMessages(activeId);
-  }, [activeId]);
+    if (token && activeId) loadMessages(activeId);
+  }, [activeId, token]);
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, sending]);
+  }, [messages, guestMessages, sending]);
 
   async function handleSend(e) {
     e.preventDefault();
     const text = input.trim();
-    if (!text || sending || !activeId) return;
-
-    setMessages((prev) => [...prev, { role: "user", content: text }]);
+    if (!text || sending) return;
     setInput("");
     setSending(true);
 
+    if (!token) {
+      const history = guestMessages;
+      setGuestMessages((prev) => [...prev, { role: "user", content: text }]);
+      try {
+        const response = await fetch(`${API_BASE}/chat/guest`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: text, history }),
+        });
+        const data = await response.json();
+        setGuestMessages((prev) => [...prev, { role: "assistant", content: data.reply || "Sorry, something went wrong." }]);
+      } catch {
+        setGuestMessages((prev) => [...prev, { role: "assistant", content: "Sorry — I couldn't reach the menu right now." }]);
+      } finally {
+        setSending(false);
+      }
+      return;
+    }
+
+    if (!activeId) { setSending(false); return; }
+    setMessages((prev) => [...prev, { role: "user", content: text }]);
     try {
       const response = await authedFetch(`${basePath}/chat`, {
         method: "POST",
         body: JSON.stringify({ message: text, conversation_id: activeId }),
       });
-
-      if (response.status === 401) return onLogout();
-
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || "Something went wrong.");
-
       setMessages((prev) => [...prev, { role: "assistant", content: data.reply }]);
-
-      // First message in a fresh thread gets it a real title — refresh
-      // the sidebar list so it shows up instead of "New conversation".
-      loadConversations(activeId);
+      loadConversations();
     } catch (err) {
       setMessages((prev) => [...prev, { role: "assistant", content: `Sorry — ${err.message}` }]);
     } finally {
@@ -289,117 +429,103 @@ function ChatScreen({ token, onLogout, basePath, isAdmin }) {
     }
   }
 
+  const activeMessages = token ? messages : guestMessages;
+
   return (
-    <div className="app-layout">
-      <Sidebar
-        conversations={conversations}
-        activeId={activeId}
-        onSelect={setActiveId}
-        onNewChat={handleNewChat}
-        open={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-      />
+    <>
+      {!open && (
+        <button className="chat-launcher" onClick={() => setOpen(true)} aria-label="Open chat">
+          <ChatBubbleIcon />
+        </button>
+      )}
 
-      <div className="chat-screen">
-        <div className="chat-header">
-          <div className="brand-mark">
-            <button className="menu-toggle-btn" onClick={() => setSidebarOpen(true)}>
-              <MenuIcon />
-            </button>
-            <CupIcon />
-            <h1 className="brand">The Daily Grind</h1>
-            {isAdmin && <span className="admin-badge">Admin</span>}
+      {open && (
+        <div className="chat-panel">
+          <div className="chat-panel-header">
+            <div className="who"><CupIcon />Ask The Daily Grind</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {token && conversations.length > 0 && (
+                <select
+                  className="chat-history-select"
+                  value={activeId || ""}
+                  onChange={(e) => setActiveId(Number(e.target.value))}
+                >
+                  {conversations.map((c) => (
+                    <option key={c.id} value={c.id}>{c.title || "New chat"}</option>
+                  ))}
+                </select>
+              )}
+              {token && (
+                <button className="chat-panel-close" onClick={handleNewChat} aria-label="New chat" title="New chat">+</button>
+              )}
+              <button className="chat-panel-close" onClick={() => setOpen(false)} aria-label="Close chat"><CloseIcon /></button>
+            </div>
           </div>
-          <button className="logout-btn" onClick={onLogout}>Log out</button>
+
+          {!token && (
+            <div className="guest-banner">
+              <span>Browsing as guest — log in to order</span>
+              <button onClick={onRequireAuth}>Log in</button>
+            </div>
+          )}
+
+          <div className="chat-messages">
+            {activeMessages.length === 0 && (
+              <div className="chat-empty">
+                {token ? "Ask about your order, or what's good today." : "Ask what's on the menu, what's fresh, or for a recommendation."}
+              </div>
+            )}
+            {activeMessages.map((m, i) => (
+              <div key={i} className={`msg-row ${m.role}`}>
+                <div className="msg-bubble" dir="auto">{m.content}</div>
+              </div>
+            ))}
+            {sending && (
+              <div className="msg-row assistant">
+                <div className="msg-bubble thinking">Thinking…</div>
+              </div>
+            )}
+            <div ref={scrollRef} />
+          </div>
+
+          <form className="chat-input-bar" onSubmit={handleSend}>
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              dir="auto"
+              placeholder={token ? "Ask about your order…" : "Ask about the menu…"}
+              disabled={sending}
+            />
+            <button type="submit" disabled={sending || !input.trim()}>Send</button>
+          </form>
         </div>
-
-        <div className="messages">
-          {loading && (
-            <div className="empty-state">
-              <CupIcon className="cup-mark" />
-              <span className="brand">Loading…</span>
-            </div>
-          )}
-
-          {!loading && messages.length === 0 && (
-            <div className="empty-state">
-              <CupIcon className="cup-mark" />
-              <span className="brand">
-                {isAdmin ? "What would you like to manage?" : "What can I get started for you?"}
-              </span>
-              {isAdmin
-                ? "Add or update products, manage user accounts — just ask."
-                : "Ask about the menu, add something to your cart, or check an order."}
-            </div>
-          )}
-
-          {messages.map((m, i) => (
-            <div key={i} className={`message-row ${m.role}`}>
-              {m.role === "assistant" && <div className="avatar"><CupIcon /></div>}
-              <div className="message-bubble" dir="auto">{m.content}</div>
-            </div>
-          ))}
-
-          {sending && (
-            <div className="message-row assistant">
-              <div className="avatar"><CupIcon /></div>
-              <div className="message-bubble loading">Thinking…</div>
-            </div>
-          )}
-
-          <div ref={scrollRef} />
-        </div>
-
-        <form className="input-bar" onSubmit={handleSend}>
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            dir="auto"
-            placeholder={
-              isAdmin
-                ? "Add a product, deactivate a user, update a price…"
-                : "Ask about the menu, or say what you'd like to order…"
-            }
-            disabled={sending}
-          />
-          <button type="submit" disabled={sending || !input.trim()}>Send</button>
-        </form>
-      </div>
-    </div>
+      )}
+    </>
   );
 }
 
+/* ---------------------------------------------------------
+   App
+   --------------------------------------------------------- */
 function App() {
   const [token, setToken] = useState(() => localStorage.getItem("shop_token"));
   const [role, setRole] = useState(null);
-  const [checkingRole, setCheckingRole] = useState(true);
+  const [authModal, setAuthModal] = useState(null); // null | "login" | "signup"
+  const [chatOpenSignal, setChatOpenSignal] = useState(0);
 
   useEffect(() => {
-    if (!token) {
-      setCheckingRole(false);
-      return;
-    }
-    (async () => {
-      try {
-        const response = await fetch(`${API_BASE}/me`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!response.ok) {
-          handleLogout();
-          return;
-        }
-        const data = await response.json();
-        setRole(data.role);
-      } finally {
-        setCheckingRole(false);
-      }
-    })();
+    if (!token) { setRole(null); return; }
+    fetch(`${API_BASE}/me`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((data) => setRole(data.role))
+      .catch(() => handleLogout());
   }, [token]);
 
   function handleAuthenticated(newToken) {
     localStorage.setItem("shop_token", newToken);
-    setCheckingRole(true);
     setToken(newToken);
+    setAuthModal(null);
+    setChatOpenSignal((n) => n + 1);
   }
 
   function handleLogout() {
@@ -408,29 +534,36 @@ function App() {
     setRole(null);
   }
 
-  if (!token) {
-    return <AuthScreen onAuthenticated={handleAuthenticated} />;
-  }
-
-  if (checkingRole) {
-    return (
-      <div className="auth-screen">
-        <BeanPattern />
-        <div className="empty-state" style={{ color: "#F3EDE2" }}>
-          <CupIcon className="cup-mark" />
-        </div>
-      </div>
-    );
-  }
-
-  const isAdmin = role === "admin";
   return (
-    <ChatScreen
-      token={token}
-      onLogout={handleLogout}
-      basePath={isAdmin ? "/admin" : ""}
-      isAdmin={isAdmin}
-    />
+    <>
+      <Nav
+        isAuthed={!!token}
+        isAdmin={role === "admin"}
+        onLogin={() => setAuthModal("login")}
+        onSignup={() => setAuthModal("signup")}
+        onLogout={handleLogout}
+      />
+      <Hero onOpenChat={() => setChatOpenSignal((n) => n + 1)} onSignup={() => setAuthModal("signup")} />
+      <MenuPreview />
+      <Story />
+      <Footer />
+
+      <ChatWidget
+        token={token}
+        isAdmin={role === "admin"}
+        onRequireAuth={() => setAuthModal("login")}
+        openSignal={chatOpenSignal}
+      />
+
+      {authModal && (
+        <AuthModal
+          mode={authModal}
+          onClose={() => setAuthModal(null)}
+          onSwitchMode={setAuthModal}
+          onAuthenticated={handleAuthenticated}
+        />
+      )}
+    </>
   );
 }
 
