@@ -4,8 +4,6 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from openai import OpenAI
 from sqlalchemy.orm import Session
 import os
-from schemas.chat_schema import GuestChatMessage,GuestChatRequest,GuestChatResponse
-from tools_register import guest_available_tools
 from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.dependencies import get_current_user, get_db
@@ -23,9 +21,12 @@ from app.services.chat_services import (
     save_message,
 )
 from app.services.products_services import get_products
-from app.tools_register import USER_SCOPED_TOOLS, available_tools
+from app.tools_register import USER_SCOPED_TOOLS, available_tools,guest_available_tools
 from app.tools_schema import tools as all_tools
+from app.tools_schema import guest_tools
 from app.core.prompt_guard import looks_like_injection_attempt
+from app.schemas.chat_schema import ProductOut,GuestChatMessage,GuestChatRequest,GuestChatResponse
+from app.services.products_services import get_products as get_all_products
 
 router = APIRouter(tags=["chat"])
 
