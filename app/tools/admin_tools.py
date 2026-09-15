@@ -26,7 +26,7 @@ def _resolve_single_user(db, username: str):
         }
     return matches[0], None
 
-#tools for products
+# tools for products
 def tool_add_product(name: str, description: str, price: float):
     db = SessionLocal()
     try:
@@ -37,6 +37,7 @@ def tool_add_product(name: str, description: str, price: float):
         }
     finally:
         db.close()
+
 def tool_list_products():
     db = SessionLocal()
     try:
@@ -47,6 +48,8 @@ def tool_list_products():
         ]
     finally:
         db.close()
+
+    
 
 def tool_update_product(
     product_name: str,

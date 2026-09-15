@@ -5,8 +5,8 @@ from app.dependencies import get_db,get_current_user
 from app.schemas.user_schema import Token,UserLogin,UserOut,UserSignup
 from app.services.user_services import get_user_by_username,create_user
 from app.core.rate_limit import limiter
-router = APIRouter(tags=["user"])
 
+router = APIRouter(tags=["user"])
 @router.post("/signup",response_model=Token,status_code=status.HTTP_201_CREATED)
 @limiter.limit("5/minute")
 def signup(request:Request,payload:UserSignup,db:Session=Depends(get_db)):

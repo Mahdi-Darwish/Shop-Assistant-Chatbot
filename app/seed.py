@@ -1,25 +1,9 @@
-"""Seeds baseline reference data (the product catalog) into a fresh
-database. Safe to run every time the container starts — it checks first
-and does nothing if products already exist, so it never duplicates rows
-on a restart.
-This is for REFERENCE/CATALOG data only (products). Never seed real user
-data this way — users, carts, and orders should always start empty in any
-new environment; only shared baseline data like a product catalog belongs
-here.
-"""
 import pathlib
 from sqlalchemy import text
 from app.database import SessionLocal
 from app.models.product_model import Product
 SQL_FILE = pathlib.Path(__file__).resolve().parent.parent / "insert_products.sql"
 def _extract_runnable_statements(sql_text: str) -> list[str]:
-    """pg_dump output contains a lot we can't (and don't need to) run
-    through a plain DB connection — comments, SET commands, and (in
-    pg_dump 18+) \\restrict/\\unrestrict lines, which are psql-CLIENT-ONLY
-    meta-commands, not valid SQL, and will error if executed directly.
-    We only need the actual data: INSERT statements, and the sequence
-    reset so future auto-generated ids don't collide with these seeded
-    ones."""
     statements = []
     for line in sql_text.splitlines():
         stripped = line.strip()

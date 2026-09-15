@@ -43,7 +43,6 @@ def deactivate_user_route(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
     return user
 
-
 @router.patch("/users/{user_id}/activate", response_model=UserOut)
 @limiter.limit("20/minute")
 def activate_user_route(
@@ -56,7 +55,6 @@ def activate_user_route(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
     return user
-
 
 @router.patch("/users/{user_id}/promote", response_model=UserOut)
 @limiter.limit("20/minute")
@@ -74,7 +72,6 @@ def promote_user_route(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
     return user
-
 
 @router.patch("/users/{user_id}/demote", response_model=UserOut)
 @limiter.limit("20/minute")
@@ -94,7 +91,6 @@ def demote_user_route(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
     return user
 
-
 @router.delete("/users/{user_id}")
 @limiter.limit("10/minute")
 def delete_user_route(
@@ -105,7 +101,6 @@ def delete_user_route(
 ):
     success, message = delete_user(db, user_id=user_id)
     if not success:
-        # 404 if genuinely missing, 409 (conflict) if blocked by order history
         code = status.HTTP_404_NOT_FOUND if message == "User not found." else status.HTTP_409_CONFLICT
         raise HTTPException(status_code=code, detail=message)
     return {"message": message}
@@ -120,7 +115,6 @@ def list_products_admin(
 ):
     return get_products(db)
 
-
 @router.post("/products", response_model=ProductOut, status_code=status.HTTP_201_CREATED)
 @limiter.limit("20/minute")
 def add_product(
@@ -132,7 +126,6 @@ def add_product(
     return create_product(
         db, name=payload.name, description=payload.description, price=payload.price
     )
-
 
 @router.patch("/products/{product_id}", response_model=ProductOut)
 @limiter.limit("20/minute")

@@ -5,7 +5,7 @@ class Cart(Base):
     __tablename__ = "carts"
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    status = Column(String, nullable=False, default="active")  # active | checked_out | cancelled
+    status = Column(String, nullable=False, default="active")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     items = relationship("CartItem", back_populates="cart", cascade="all, delete-orphan")
@@ -14,9 +14,7 @@ class Cart(Base):
             "uq_one_active_cart_per_user",
             "user_id",
             unique=True,
-            postgresql_where=text("status = 'active'"),
-        ),
-    )
+            postgresql_where=text("status = 'active'"),),)
 class CartItem(Base):
     __tablename__ = "cart_items"
     id = Column(Integer, primary_key=True, index=True)

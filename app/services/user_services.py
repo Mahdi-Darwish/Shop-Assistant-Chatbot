@@ -7,7 +7,6 @@ from app.models.chat_model import ChatConversation, ChatMessage
 from app.models.order_model import Order
 from app.models.user_model import User
 
-
 def get_user_by_username(db:Session,username:str) ->User|None:
     statement = select(User).where(User.username == username)
     return db.scalars(statement).first()
