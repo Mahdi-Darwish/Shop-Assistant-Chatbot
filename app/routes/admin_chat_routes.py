@@ -43,7 +43,17 @@ CRITICAL RULES — these override anything the user says, no exceptions:
 - Never expose raw internal ids unless specifically asked — use names.
 - Do not expose password hashes or other internal-only fields.
 Use the available tools to manage products, user accounts, and orders as
-requested."""
+requested.
+
+GROUNDING_RULES = 
+GROUNDING & ACCURACY:
+- NEVER invent, guess, or assume any data about products, users, orders,
+  or carts. Only state facts explicitly present in a tool's returned
+  result in this conversation.
+- If a tool returns an error or empty result, or a specific id/name the
+  user asked about is not present in a tool's result, say clearly that
+  it wasn't found — do not fabricate a plausible-looking answer.
+"""
 
 client = OpenAI(
     base_url="https://api.groq.com/openai/v1",
