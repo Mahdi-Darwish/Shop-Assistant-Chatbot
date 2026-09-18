@@ -13,7 +13,7 @@ def signup(request:Request,payload:UserSignup,db:Session=Depends(get_db)):
     if get_user_by_username(db,payload.username):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="Username already taken")
     user = create_user(db,username=payload.username,password=payload.password,phone=payload.phone)
-    access_token = create_access_token({"sub":user.username})
+    access_token = create_access_token({"sub":user.username,"user_id":user.id})
     return Token(access_token=access_token)
 
 @router.post("/login",response_model=Token)
@@ -22,7 +22,7 @@ def login(request:Request,payload:UserLogin,db:Session=Depends(get_db)):
     user = get_user_by_username(db,payload.username)
     if not user or not verify_password(payload.password,user.hashed_password):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="Invalid username or password")
-    access_token = create_access_token(data={"sub":user.username})
+    access_token = create_access_token(data={"sub":user.username,"user_id":user.id})
     return Token (access_token=access_token)
 
 @router.get("/me",response_model=UserOut)
