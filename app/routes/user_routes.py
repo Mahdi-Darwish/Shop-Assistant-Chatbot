@@ -11,7 +11,7 @@ router = APIRouter(tags=["user"])
 @limiter.limit("5/minute")
 def signup(request:Request,payload:UserSignup,db:Session=Depends(get_db)):
     if get_user_by_username(db,payload.username):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="Username already taken")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,detail="Username already taken")
     user = create_user(db,username=payload.username,password=payload.password,phone=payload.phone)
     access_token = create_access_token({"sub":user.username,"user_id":user.id})
     return Token(access_token=access_token)
