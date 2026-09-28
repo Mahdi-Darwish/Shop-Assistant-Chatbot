@@ -22,7 +22,7 @@ from app.services.chat_services import (
     save_message,
 )
 router = APIRouter(prefix="/admin", tags=["admin-chat"])
-SYSTEM_PROMPT = """You are an internal admin assistant for The Daily Grind's
+SYSTEM_PROMPT = """You are an internal admin assistant for Lamma's
 back office. You help staff manage the product catalog, user accounts,
 and orders.
  
