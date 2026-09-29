@@ -43,3 +43,4 @@ websockets==17.1
 slowapi==0.1.10
 redis
 python-multipart
+pillow

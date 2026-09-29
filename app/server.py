@@ -2,7 +2,6 @@ import logging
 import redis
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -10,8 +9,7 @@ from slowapi.middleware import SlowAPIMiddleware
 from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.database import engine
-from app.routes import admin_chat_routes, admin_routes, chat_routes, user_routes
-from app.services.image_services import PRODUCT_IMAGE_DIR, UPLOAD_ROOT
+from app.routes import admin_chat_routes, admin_routes, chat_routes, image_routes, user_routes
 
 logger = logging.getLogger("uvicorn.error")
 app = FastAPI(title="Shop API")
@@ -82,7 +80,4 @@ app.include_router(user_routes.router)
 app.include_router(admin_routes.router)
 app.include_router(admin_chat_routes.router)
 app.include_router(chat_routes.router)
-
-# Uploaded product photos (saved by POST /admin/uploads/product-image).
-PRODUCT_IMAGE_DIR.mkdir(parents=True, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=str(UPLOAD_ROOT)), name="uploads")
+app.include_router(image_routes.router)  # product photos stored in Postgres

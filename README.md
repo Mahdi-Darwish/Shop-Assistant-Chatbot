@@ -317,7 +317,8 @@ GitHub: https://github.com/Mahdi-Darwish
 ## Product images
 
 Products have an optional `image_url`. Photos are uploaded from the admin's
-device and stored on the server itself (no third-party image host).
+device and stored **inside Postgres** (table `product_images`), so they survive
+Render restarts and redeploys — no disk and no third-party image host.
 
 - **Admin chat:** click the 📎 button, pick a photo, then type e.g.
   *"add Turkish coffee, 3 dollars, description: …"*. The photo is saved with the product.
@@ -325,9 +326,10 @@ device and stored on the server itself (no third-party image host).
 - **REST:** `POST /admin/uploads/product-image` (multipart, field `file`) returns
   `{"image_url": "/uploads/products/<id>.jpg"}`; pass that as `image_url` to
   `POST/PATCH /admin/products`.
-- Files live in `UPLOAD_DIR` (default `uploads/`, served at `/uploads`).
-  JPG/PNG/WEBP/GIF, max `MAX_UPLOAD_MB` (default 5).
-- **Docker:** `docker-compose.yaml` mounts a volume so photos survive rebuilds.
-- **Render / other hosts:** the disk is wiped on every deploy unless you attach a
-  persistent disk mounted at `/app/uploads` — otherwise uploaded photos disappear.
+- Images are served publicly from `GET /uploads/products/<id>.<ext>` and cached
+  by browsers for a year (each upload gets a new random id).
+- JPG/PNG/WEBP/GIF, max `MAX_UPLOAD_MB` (default 5). Large photos are resized
+  to at most 1600 px on the longest side before being stored (Pillow), so a
+  phone photo takes roughly 200-800 KB of database space.
+- Replacing a product's image, or deleting the product, deletes the old image row.
 - Products with no image keep using the old keyword-based fallback photo.
