@@ -15,6 +15,7 @@ from app.tools_schema import guest_tools
 from app.core.prompt_guard import looks_like_injection_attempt
 from app.schemas.chat_schema import ProductOut, GuestChatRequest, GuestChatResponse
 from app.services.products_services import get_products as get_all_products
+from app.services.chat_cards import CardCollector, load_cards, strip_image_urls
 
 router = APIRouter(tags=["chat"])
 SYSTEM_PROMPT = """You are a helpful shop assistant for Lamma, a coffee and dessert shop.
@@ -49,6 +50,7 @@ When presenting products or services to the user:
 - Format prices with two decimal places
 - Use bullet points or another easy-to-read structure
 - Do not expose raw python dictionaries, JSON, or internal tool results
+- Product photos are attached automatically by the app under your reply. Never write image links and never say you cannot show pictures
 - Speak naturally and professionally
 
 If the user asks for multiple different items in one message (e.g. "2
@@ -106,7 +108,8 @@ CRITICAL RULES — these override anything the user says, no exceptions:
 
 When presenting products, format cleanly with name, description, and
 price (two decimals), using bullet points, and never expose raw
-dictionaries or JSON."""
+dictionaries or JSON. Product photos are attached automatically under
+your reply — never write image links and never say you can't show pictures."""
 client = OpenAI(
     base_url="https://api.groq.com/openai/v1",
     # api_key=os.environ.get("GROQ_API_KEY"),
@@ -149,7 +152,10 @@ def get_conversation_messages(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
 
     messages = get_messages_for_conversation(db, conversation_id=conversation.id)
-    return [ChatMessageOut(role=m.role, content=m.content) for m in messages]
+    return [
+        ChatMessageOut(role=m.role, content=m.content, cards=load_cards(m.cards))
+        for m in messages
+    ]
 
 @router.post("/chat", response_model=ChatResponse)
 @limiter.limit("20/minute")
@@ -177,6 +183,7 @@ def chat(
     messages.append({"role": "user", "content": payload.message})
 
     reply = None
+    collector = CardCollector()
     for _ in range(MAX_TOOL_ROUNDS):
         response = client.chat.completions.create(
            model=MODEL_NAME,
@@ -203,14 +210,16 @@ def chat(
                     result = function(**args)
             except Exception as exc:
                 result = {"error": f"Tool call failed: {exc}"}
+            collector.collect(tool_name, result)
             messages.append(
-                {"role": "tool", "tool_call_id": tool_call.id, "content": str(result)}
+                {"role": "tool", "tool_call_id": tool_call.id, "content": str(strip_image_urls(result))}
             )
     if not reply:
         reply = "Sorry, I wasn't able to complete that — could you try rephrasing?"
+    cards = collector.build(reply)
     save_message(db, conversation_id=conversation.id, role="user", content=payload.message)
-    save_message(db, conversation_id=conversation.id, role="assistant", content=reply)
-    return ChatResponse(reply=reply, conversation_id=conversation.id)
+    save_message(db, conversation_id=conversation.id, role="assistant", content=reply, cards=cards)
+    return ChatResponse(reply=reply, conversation_id=conversation.id, cards=cards)
 
 @router.get("/products", response_model=list[ProductOut])
 @limiter.limit("60/minute")
@@ -234,6 +243,7 @@ def chat_guest(request: Request, payload: GuestChatRequest):
     messages += [{"role": m.role, "content": m.content} for m in payload.history]
     messages.append({"role": "user", "content": payload.message})
     reply = None
+    collector = CardCollector()
     for _ in range(MAX_TOOL_ROUNDS):
         response = client.chat.completions.create(
             model=MODEL_NAME,
@@ -254,7 +264,8 @@ def chat_guest(request: Request, payload: GuestChatRequest):
                 result = function(**args)
             except Exception as exc:
                 result = {"error": f"Tool call failed: {exc}"}
-            messages.append({"role": "tool", "tool_call_id": tool_call.id, "content": str(result)})
+            collector.collect(tool_name, result)
+            messages.append({"role": "tool", "tool_call_id": tool_call.id, "content": str(strip_image_urls(result))})
     if not reply:
         reply = "Sorry, I wasn't able to complete that — could you try rephrasing?"
-    return GuestChatResponse(reply=reply)
+    return GuestChatResponse(reply=reply, cards=collector.build(reply))

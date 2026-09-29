@@ -38,6 +38,12 @@ def tool_add_to_cart(user_id: int, product_name: str, quantity: int = 1):
             "message": f"Added {quantity} x {product.name} to the cart.",
             "product_id": product.id,
             "quantity_in_cart": item.quantity,
+            "product": {
+                "id": product.id,
+                "name": product.name,
+                "price": product.price,
+                "image_url": product.image_url,
+            },
         }
     finally:
         db.close()
@@ -82,6 +88,7 @@ def tool_view_cart(user_id: int):
                     "quantity": item.quantity,
                     "unit_price": item.product.price,
                     "subtotal": subtotal,
+                    "image_url": item.product.image_url,
                 }
             )
         return {"cart_id": cart.id, "items": out_items, "total": total}
@@ -100,6 +107,16 @@ def tool_checkout_cart(user_id: int):
             "order_id": order.id,
             "status": order.status,
             "total_price": order.total_price,
+            "items": [
+                {
+                    "product_name": oi.product.name,
+                    "quantity": oi.quantity,
+                    "unit_price": oi.price_at_purchase,
+                    "subtotal": oi.price_at_purchase * oi.quantity,
+                    "image_url": oi.product.image_url,
+                }
+                for oi in order.items
+            ],
         }
     finally:
         db.close()

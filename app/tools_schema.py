@@ -210,6 +210,14 @@ admin_tools = [
                         "type": "number",
                         "description": "The price, e.g. 4.50.",
                     },
+                    "image_url": {
+                        "type": ["string", "null"],
+                        "description": (
+                            "Only if the admin typed an http(s) image link in their "
+                            "message. Never invent one. If the admin attached an image "
+                            "file it is saved automatically — leave this empty."
+                        ),
+                    },
                 },
                 "required": ["name", "description", "price"],
             },
@@ -252,6 +260,13 @@ admin_tools = [
                     "new_price": {
                         "type": ["number", "null"],
                         "description": "New price, if changing it.",
+                    },
+                    "image_url": {
+                        "type": ["string", "null"],
+                        "description": (
+                            "New image, only if the admin typed an http(s) link. Never "
+                            "invent one. An attached image file is saved automatically."
+                        ),
                     },
                 },
                 "required": ["product_name"],

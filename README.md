@@ -312,3 +312,22 @@ This creates a conversational interface through which customers can interact wit
 **Mahdi Darwish**
 
 GitHub: https://github.com/Mahdi-Darwish
+
+
+## Product images
+
+Products have an optional `image_url`. Photos are uploaded from the admin's
+device and stored on the server itself (no third-party image host).
+
+- **Admin chat:** click the 📎 button, pick a photo, then type e.g.
+  *"add Turkish coffee, 3 dollars, description: …"*. The photo is saved with the product.
+  The same works for *"change the picture of Turkish coffee"* (attach a new one).
+- **REST:** `POST /admin/uploads/product-image` (multipart, field `file`) returns
+  `{"image_url": "/uploads/products/<id>.jpg"}`; pass that as `image_url` to
+  `POST/PATCH /admin/products`.
+- Files live in `UPLOAD_DIR` (default `uploads/`, served at `/uploads`).
+  JPG/PNG/WEBP/GIF, max `MAX_UPLOAD_MB` (default 5).
+- **Docker:** `docker-compose.yaml` mounts a volume so photos survive rebuilds.
+- **Render / other hosts:** the disk is wiped on every deploy unless you attach a
+  persistent disk mounted at `/app/uploads` — otherwise uploaded photos disappear.
+- Products with no image keep using the old keyword-based fallback photo.

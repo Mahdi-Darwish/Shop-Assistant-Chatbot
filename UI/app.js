@@ -31,6 +31,12 @@ const ChatBubbleIcon = () => (
   </svg>
 );
 
+const AttachIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M20 11.5l-7.6 7.6a5 5 0 0 1-7.1-7.1l8-8a3.4 3.4 0 0 1 4.8 4.8l-8 8a1.8 1.8 0 0 1-2.5-2.5l7.3-7.3" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+
 const CartIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path d="M3 4h2l2.4 12.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L21 8H6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
@@ -254,6 +260,63 @@ function menuImageUrl(id, width) {
   return `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=${width}&q=85`;
 }
 
+/* Product photos uploaded by the admin are stored as "/uploads/products/x.jpg"
+   (served by the API); full http(s) links are used as-is. */
+function resolveImg(url) {
+  if (!url) return null;
+  return url.startsWith("/") ? `${API_BASE}${url}` : url;
+}
+
+/* The product's own photo if it has one — otherwise the keyword-based
+   fallback photo, so products added before image_url existed still look good. */
+function productImageSrc(product, width = 400) {
+  return resolveImg(product.image_url) || menuImageUrl(getMenuImageId(product), width);
+}
+
+const money = (n) => `$${Number(n || 0).toFixed(2)}`;
+
+/* Product photos shown under an assistant reply. */
+function ProductCards({ products }) {
+  return (
+    <div className="chat-products">
+      {products.map((p) => (
+        <div className="chat-product" key={p.id}>
+          <img src={productImageSrc(p, 320)} alt={p.name} loading="lazy" decoding="async" />
+          <div className="chat-product-info">
+            <span className="chat-product-name">{p.name}</span>
+            {typeof p.price === "number" && <span className="chat-product-price">{money(p.price)}</span>}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* Cart / order receipt with a photo per line — shown for "view cart" and checkout. */
+function CartCard({ cart }) {
+  return (
+    <div className="chat-cart">
+      <div className="chat-cart-title">
+        {cart.kind === "order" ? `Order #${cart.order_id}` : "Your cart"}
+      </div>
+      {cart.items.map((it, i) => (
+        <div className="chat-cart-row" key={i}>
+          <img src={productImageSrc({ name: it.name, image_url: it.image_url }, 160)} alt={it.name} loading="lazy" decoding="async" />
+          <div className="chat-cart-info">
+            <span className="chat-cart-name">{it.name}</span>
+            <span className="chat-cart-qty">{it.quantity} × {money(it.unit_price)}</span>
+          </div>
+          <span className="chat-cart-sub">{money(it.subtotal)}</span>
+        </div>
+      ))}
+      <div className="chat-cart-total">
+        <span>Total</span>
+        <span>{money(cart.total)}</span>
+      </div>
+    </div>
+  );
+}
+
 function MenuPreview() {
   const [products, setProducts] = useState(null);
   const [error, setError] = useState(false);
@@ -300,17 +363,22 @@ function MenuPreview() {
         )}
         {!error && products && products.slice(0, 8).map((p) => {
           const imgId = getMenuImageId(p);
+          const ownImage = resolveImg(p.image_url);
           return (
             <div className="menu-card" key={p.id}>
               <div className="menu-card-photo">
-                <img
-                  src={menuImageUrl(imgId, 800)}
-                  srcSet={`${menuImageUrl(imgId, 400)} 400w, ${menuImageUrl(imgId, 800)} 800w`}
-                  sizes="(max-width: 560px) 90vw, (max-width: 1024px) 45vw, 320px"
-                  alt={p.name}
-                  loading="lazy"
-                  decoding="async"
-                />
+                {ownImage ? (
+                  <img src={ownImage} alt={p.name} loading="lazy" decoding="async" />
+                ) : (
+                  <img
+                    src={menuImageUrl(imgId, 800)}
+                    srcSet={`${menuImageUrl(imgId, 400)} 400w, ${menuImageUrl(imgId, 800)} 800w`}
+                    sizes="(max-width: 560px) 90vw, (max-width: 1024px) 45vw, 320px"
+                    alt={p.name}
+                    loading="lazy"
+                    decoding="async"
+                  />
+                )}
               </div>
               <div className="menu-card-body">
                 <h3>{p.name}</h3>
@@ -505,6 +573,10 @@ function ChatWidget({ token, isAdmin, onRequireAuth, openSignal }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [pendingImage, setPendingImage] = useState(null); // admin: { url, preview }
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const fileInputRef = useRef(null);
   const scrollRef = useRef(null);
 
   useEffect(() => {
@@ -562,13 +634,45 @@ function ChatWidget({ token, isAdmin, onRequireAuth, openSignal }) {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, guestMessages, sending]);
 
+  /* Admin: upload the picked image right away; the returned path is then
+     sent along with the next chat message (add/update product). */
+  async function handleFilePick(e) {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploadError("");
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadError("Image is too large (max 5 MB).");
+      return;
+    }
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const response = await fetch(`${API_BASE}/admin/uploads/product-image`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` }, // no Content-Type: the browser sets the multipart boundary
+        body: form,
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(typeof data.detail === "string" ? data.detail : "Upload failed.");
+      }
+      setPendingImage({ url: data.image_url, preview: URL.createObjectURL(file) });
+    } catch (err) {
+      setUploadError(err.message || "Upload failed.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   async function sendMessage(text) {
     if (!text || sending) return;
     setInput("");
     setSending(true);
 
     if (!token) {
-      const history = guestMessages;
+      const history = guestMessages.map(({ role, content }) => ({ role, content }));
       setGuestMessages((prev) => [...prev, { role: "user", content: text }]);
       try {
         const response = await fetch(`${API_BASE}/chat/guest`, {
@@ -577,7 +681,7 @@ function ChatWidget({ token, isAdmin, onRequireAuth, openSignal }) {
           body: JSON.stringify({ message: text, history }),
         });
         const data = await response.json();
-        setGuestMessages((prev) => [...prev, { role: "assistant", content: data.reply || "Sorry, something went wrong." }]);
+        setGuestMessages((prev) => [...prev, { role: "assistant", content: data.reply || "Sorry, something went wrong.", cards: data.cards }]);
       } catch {
         setGuestMessages((prev) => [...prev, { role: "assistant", content: "Sorry — I couldn't reach the menu right now." }]);
       } finally {
@@ -587,15 +691,23 @@ function ChatWidget({ token, isAdmin, onRequireAuth, openSignal }) {
     }
 
     if (!activeId) { setSending(false); return; }
-    setMessages((prev) => [...prev, { role: "user", content: text }]);
+    const attached = isAdmin ? pendingImage : null;
+    setMessages((prev) => [...prev, { role: "user", content: text, localImage: attached?.preview }]);
     try {
       const response = await authedFetch(`${basePath}/chat`, {
         method: "POST",
-        body: JSON.stringify({ message: text, conversation_id: activeId }),
+        body: JSON.stringify({
+          message: text,
+          conversation_id: activeId,
+          ...(attached ? { image_url: attached.url } : {}),
+        }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || "Something went wrong.");
-      setMessages((prev) => [...prev, { role: "assistant", content: data.reply }]);
+      if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : "Something went wrong.");
+      setMessages((prev) => [...prev, { role: "assistant", content: data.reply, cards: data.cards }]);
+      // Keep the attachment until a product was actually saved with it, so the
+      // admin can answer a follow-up question ("what's the price?") without re-attaching.
+      if (attached && data.image_used) setPendingImage(null);
       loadConversations();
     } catch (err) {
       setMessages((prev) => [...prev, { role: "assistant", content: `Sorry — ${err.message}` }]);
@@ -676,7 +788,14 @@ function ChatWidget({ token, isAdmin, onRequireAuth, openSignal }) {
               return (
                 <div key={i} className={`msg-row ${m.role}`}>
                   <div className="msg-bubble" dir="auto">
+                    {m.role === "user" && m.localImage && (
+                      <img className="msg-attached-img" src={m.localImage} alt="Attached" />
+                    )}
                     {m.role === "assistant" ? <MessageContent text={m.content} /> : m.content}
+                    {m.role === "assistant" && m.cards?.cart && <CartCard cart={m.cards.cart} />}
+                    {m.role === "assistant" && m.cards?.products?.length > 0 && (
+                      <ProductCards products={m.cards.products} />
+                    )}
                     {cartItem && (
                       <div className="msg-actions">
                         <button
@@ -708,7 +827,42 @@ function ChatWidget({ token, isAdmin, onRequireAuth, openSignal }) {
             <div ref={scrollRef} />
           </div>
 
+          {isAdmin && (pendingImage || uploading || uploadError) && (
+            <div className={`chat-attachment ${uploadError ? "error" : ""}`}>
+              {pendingImage && <img src={pendingImage.preview} alt="Attached product" />}
+              <span>
+                {uploadError
+                  ? uploadError
+                  : uploading
+                  ? "Uploading image…"
+                  : "Image attached — it will be saved with the product you add or update."}
+              </span>
+              <button type="button" onClick={() => { setPendingImage(null); setUploadError(""); }} aria-label="Remove image">×</button>
+            </div>
+          )}
+
           <form className="chat-input-bar" onSubmit={handleSend}>
+            {isAdmin && (
+              <>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  style={{ display: "none" }}
+                  onChange={handleFilePick}
+                />
+                <button
+                  type="button"
+                  className="chat-attach-btn"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={sending || uploading}
+                  aria-label="Attach product image"
+                  title="Attach a product image from your device"
+                >
+                  <AttachIcon />
+                </button>
+              </>
+            )}
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}

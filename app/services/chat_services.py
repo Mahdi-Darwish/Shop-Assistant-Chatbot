@@ -1,3 +1,4 @@
+import json
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.models.chat_model import ChatConversation, ChatMessage
@@ -36,8 +37,15 @@ def get_messages_for_conversation(db: Session, conversation_id: int) -> list[Cha
     )
     messages = db.scalars(statement).all()
     return list(reversed(messages))
-def save_message(db: Session, conversation_id: int, role: str, content: str) -> ChatMessage:
-    message = ChatMessage(conversation_id=conversation_id, role=role, content=content)
+def save_message(
+    db: Session, conversation_id: int, role: str, content: str, cards: dict | None = None
+) -> ChatMessage:
+    message = ChatMessage(
+        conversation_id=conversation_id,
+        role=role,
+        content=content,
+        cards=json.dumps(cards) if cards else None,
+    )
     db.add(message)
     if role == "user":
         conversation = db.get(ChatConversation, conversation_id)

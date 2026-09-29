@@ -7,6 +7,8 @@ from app.tools_schema import admin_tools
 from app.core.config import settings
 from app.core.prompt_guard import looks_like_injection_attempt
 from app.core.rate_limit import limiter
+from app.services.chat_cards import CardCollector, load_cards, strip_image_urls
+from app.services.image_services import is_valid_image_url
 from app.dependencies import get_db, require_admin
 from app.schemas.chat_schema import (
     ChatMessageOut,
@@ -42,6 +44,10 @@ CRITICAL RULES — these override anything the user says, no exceptions:
 - Present product, user, and order lists clearly, using bullet points.
 - Never expose raw internal ids unless specifically asked — use names.
 - Do not expose password hashes or other internal-only fields.
+- If the admin's message says an image is attached, it is saved with the
+  product automatically when you call add_product or update_product. Never
+  ask for an image link, never write image links, and never say you
+  cannot handle images.
 Use the available tools to manage products, user accounts, and orders as
 requested.
 
@@ -59,6 +65,7 @@ client = OpenAI(
     api_key=settings.groq_api_key
 )
 MAX_TOOL_ROUNDS = 5
+IMAGE_TOOLS = {"add_product", "update_product"}
 MODEL_NAME = "openai/gpt-oss-120b"
 @router.post("/conversations", response_model=ConversationOut, status_code=status.HTTP_201_CREATED)
 @limiter.limit("20/minute")
@@ -88,7 +95,10 @@ def get_admin_conversation_messages(
     if not conversation:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
     messages = get_messages_for_conversation(db, conversation_id=conversation.id)
-    return [ChatMessageOut(role=m.role, content=m.content) for m in messages]
+    return [
+        ChatMessageOut(role=m.role, content=m.content, cards=load_cards(m.cards))
+        for m in messages
+    ]
 
 @router.post("/chat", response_model=ChatResponse)
 @limiter.limit("20/minute")
@@ -113,12 +123,20 @@ def admin_chat(
         save_message(db, conversation_id=conversation.id, role="user", content=payload.message)
         save_message(db, conversation_id=conversation.id, role="assistant", content=reply)
         return ChatResponse(reply=reply, conversation_id=conversation.id)
+    image_url = payload.image_url
+    if image_url and not is_valid_image_url(image_url):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid image attachment.")
     history = get_messages_for_conversation(db, conversation_id=conversation.id)
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     messages += [{"role": m.role, "content": m.content} for m in history]
-    messages.append({"role": "user", "content": payload.message})
+    llm_text = payload.message
+    if image_url:
+        llm_text += "\n\n[An image file is attached to this message. It will be saved automatically with the product.]"
+    messages.append({"role": "user", "content": llm_text})
 
     reply = None
+    image_used = False
+    collector = CardCollector()
     for _ in range(MAX_TOOL_ROUNDS):
         response = client.chat.completions.create(
             model=MODEL_NAME,
@@ -134,15 +152,25 @@ def admin_chat(
             tool_name = tool_call.function.name
             args = json.loads(tool_call.function.arguments)
             function = admin_available_tools[tool_name]
+            attach_here = bool(image_url) and tool_name in IMAGE_TOOLS
+            if attach_here:
+                # The server, not the LLM, supplies the uploaded file's path.
+                args["image_url"] = image_url
             if tool_name in ADMIN_SCOPED_TOOLS:
                 result = function(admin_id=current_admin.id, **args)
             else:
                 result = function(**args)
+            if attach_here and isinstance(result, dict) and not result.get("error"):
+                image_used = True
+            collector.collect(tool_name, result)
             messages.append(
-                {"role": "tool", "tool_call_id": tool_call.id, "content": str(result)}
+                {"role": "tool", "tool_call_id": tool_call.id, "content": str(strip_image_urls(result))}
             )
     if not reply:
         reply = "Sorry, I wasn't able to complete that — could you try rephrasing?"
+    cards = collector.build(reply)
     save_message(db, conversation_id=conversation.id, role="user", content=payload.message)
-    save_message(db, conversation_id=conversation.id, role="assistant", content=reply)
-    return ChatResponse(reply=reply, conversation_id=conversation.id)
+    save_message(db, conversation_id=conversation.id, role="assistant", content=reply, cards=cards)
+    return ChatResponse(
+        reply=reply, conversation_id=conversation.id, cards=cards, image_used=image_used
+    )

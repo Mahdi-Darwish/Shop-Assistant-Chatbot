@@ -1,4 +1,5 @@
 from app.database import SessionLocal
+from app.services.image_services import is_valid_image_url
 from app.services.products_services import (create_product,delete_product,get_products,search_product_by_name,update_product,)
 from app.services.user_services import (delete_user,all_users as get_all_users,search_users_by_username, set_user_active_status,)
 from app.services.order_services import update_order_status
@@ -27,13 +28,22 @@ def _resolve_single_user(db, username: str):
     return matches[0], None
 
 # tools for products
-def tool_add_product(name: str, description: str, price: float):
+def tool_add_product(name: str, description: str, price: float, image_url: str | None = None):
+    if image_url and not is_valid_image_url(image_url):
+        return {"error": "That image is not valid — attach an image file or give a full http(s) link."}
     db = SessionLocal()
     try:
-        product = create_product(db, name=name, description=description, price=price)
+        product = create_product(
+            db, name=name, description=description, price=price, image_url=image_url or None
+        )
         return {
-            "message": f"Added '{product.name}' at ${product.price:.2f}.",
+            "message": f"Added '{product.name}' at ${product.price:.2f}"
+                       + (" with its image." if product.image_url else "."),
             "product_id": product.id,
+            "product": {
+                "id": product.id, "name": product.name,
+                "price": product.price, "image_url": product.image_url,
+            },
         }
     finally:
         db.close()
@@ -43,7 +53,8 @@ def tool_list_products():
     try:
         products = get_products(db)
         return [
-            {"id": p.id, "name": p.name, "description": p.description, "price": p.price}
+            {"id": p.id, "name": p.name, "description": p.description, "price": p.price,
+             "image_url": p.image_url}
             for p in products
         ]
     finally:
@@ -56,18 +67,22 @@ def tool_update_product(
     new_name: str | None = None,
     new_description: str | None = None,
     new_price: float | None = None,
+    image_url: str | None = None,
 ):
+    if image_url and not is_valid_image_url(image_url):
+        return {"error": "That image is not valid — attach an image file or give a full http(s) link."}
     db = SessionLocal()
     try:
         product, error = _resolve_single_product(db, product_name)
         if error:
             return error
         updated = update_product(
-            db, product_id=product.id, name=new_name, description=new_description, price=new_price
+            db, product_id=product.id, name=new_name, description=new_description,
+            price=new_price, image_url=image_url or None,
         )
         return {
             "message": f"Updated '{updated.name}'.",
-            "product": {"id": updated.id, "name": updated.name, "description": updated.description, "price": updated.price},
+            "product": {"id": updated.id, "name": updated.name, "description": updated.description, "price": updated.price, "image_url": updated.image_url},
         }
     finally:
         db.close()

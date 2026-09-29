@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     redis_url: str
     environment: str = "development"
     frontend_url: str | None = None
+    upload_dir: str = "uploads"
+    max_upload_mb: int = 5
     model_config = SettingsConfigDict(
         env_file=".env",
         case_sensitive=False,

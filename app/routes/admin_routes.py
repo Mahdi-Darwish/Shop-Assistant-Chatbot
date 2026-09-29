@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from sqlalchemy.orm import Session
 from app.core.rate_limit import limiter
 from app.dependencies import get_db, require_admin
 from app.models.user_model import User
 from app.schemas.product_shcema import ProductSchema as ProductOut, ProductCreate,ProductUpdate
 from app.schemas.user_schema import UserOut
+from app.services.image_services import save_product_image
 from app.services.products_services import (
     create_product,
     delete_product,
@@ -124,8 +125,25 @@ def add_product(
     _admin: User = Depends(require_admin),
 ):
     return create_product(
-        db, name=payload.name, description=payload.description, price=payload.price
+        db,
+        name=payload.name,
+        description=payload.description,
+        price=payload.price,
+        image_url=payload.image_url,
     )
+
+@router.post("/uploads/product-image", status_code=status.HTTP_201_CREATED)
+@limiter.limit("20/minute")
+async def upload_product_image(
+    request: Request,
+    file: UploadFile = File(...),
+    _admin: User = Depends(require_admin),
+):
+    """Step 1 of adding a product with a photo from the admin's device.
+    Returns {"image_url": "/uploads/products/<id>.jpg"}; that value is then
+    sent as `image_url` on POST/PATCH /admin/products, or as `image_url` in
+    the admin chat request."""
+    return {"image_url": await save_product_image(file)}
 
 @router.patch("/products/{product_id}", response_model=ProductOut)
 @limiter.limit("20/minute")
@@ -142,6 +160,7 @@ def edit_product(
         name=payload.name,
         description=payload.description,
         price=payload.price,
+        image_url=payload.image_url,
     )
     if not product:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found.")

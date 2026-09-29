@@ -34,6 +34,8 @@ services:
       - .env.docker
     ports:
       - "8000:8000"
+    volumes:
+      - uploads_data:/app/uploads   # keeps product photos across rebuilds
     depends_on:
       db:
         condition: service_healthy
@@ -42,3 +44,4 @@ services:
 
 volumes:
   postgres_data:
+  uploads_data:

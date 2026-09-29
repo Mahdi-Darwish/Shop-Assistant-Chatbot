@@ -21,5 +21,7 @@ class ChatMessage(Base):
     )
     role = Column(String, nullable=False) 
     content = Column(Text, nullable=False)
+    # JSON string: product / cart cards shown under an assistant reply.
+    cards = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     conversation = relationship("ChatConversation", back_populates="messages")

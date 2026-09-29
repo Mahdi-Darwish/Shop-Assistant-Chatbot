@@ -9,5 +9,6 @@ tests/
 *.db
 .env.example
 *.dump
+uploads/
 .DS_Store
 __MACOSX/
