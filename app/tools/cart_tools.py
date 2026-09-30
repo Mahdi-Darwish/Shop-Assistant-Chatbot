@@ -24,6 +24,32 @@ def _resolve_single_product(db, product_name: str):
     return matches[0], None
 
 
+def _cart_snapshot(db, user_id: int) -> dict:
+    """The user's current cart lines + total (used by view_cart and, after
+    every add_to_cart, so the chat can show the cart with Checkout /
+    Add-more buttons instead of relying on the AI's wording)."""
+    result = get_cart_with_items(db, user_id)
+    if not result:
+        return {"items": [], "total": 0.0}
+    cart, items = result
+    out_items = []
+    total = 0.0
+    for item in sorted(items, key=lambda i: i.id):
+        subtotal = item.product.price * item.quantity
+        total += subtotal
+        out_items.append(
+            {
+                "product_id": item.product.id,
+                "product_name": item.product.name,
+                "quantity": item.quantity,
+                "unit_price": item.product.price,
+                "subtotal": subtotal,
+                "image_url": item.product.image_url,
+            }
+        )
+    return {"cart_id": cart.id, "items": out_items, "total": total}
+
+
 def tool_add_to_cart(user_id: int, product_name: str, quantity: int = 1):
     if quantity < 1:
         return {"error": "Quantity must be at least 1."}
@@ -44,6 +70,7 @@ def tool_add_to_cart(user_id: int, product_name: str, quantity: int = 1):
                 "price": product.price,
                 "image_url": product.image_url,
             },
+            "cart": _cart_snapshot(db, user_id),
         }
     finally:
         db.close()
@@ -71,27 +98,10 @@ def tool_remove_from_cart(user_id: int, product_name: str, quantity: int | None 
 def tool_view_cart(user_id: int):
     db = SessionLocal()
     try:
-        result = get_cart_with_items(db, user_id)
-        if not result:
+        snapshot = _cart_snapshot(db, user_id)
+        if not snapshot["items"]:
             return {"items": [], "total": 0.0, "message": "The cart is empty."}
-
-        cart, items = result
-        out_items = []
-        total = 0.0
-        for item in items:
-            subtotal = item.product.price * item.quantity
-            total += subtotal
-            out_items.append(
-                {
-                    "product_id": item.product.id,
-                    "product_name": item.product.name,
-                    "quantity": item.quantity,
-                    "unit_price": item.product.price,
-                    "subtotal": subtotal,
-                    "image_url": item.product.image_url,
-                }
-            )
-        return {"cart_id": cart.id, "items": out_items, "total": total}
+        return snapshot
     finally:
         db.close()
 

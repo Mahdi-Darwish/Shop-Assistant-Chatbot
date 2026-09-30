@@ -7,11 +7,12 @@ import os
 from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.dependencies import get_current_user, get_db
-from app.schemas.chat_schema import (ChatMessageOut,ChatRequest,ChatResponse,ConversationOut,)
+from app.schemas.chat_schema import (ChatMessageOut,ChatRequest,ChatResponse,CheckoutRequest,ConversationOut,)
 from app.services.chat_services import (create_conversation,get_conversation,get_conversations_by_user,get_messages_for_conversation,save_message,)
 from app.tools_register import USER_SCOPED_TOOLS, available_tools, guest_available_tools
 from app.tools_schema import tools as all_tools
 from app.tools_schema import guest_tools
+from app.tools.cart_tools import tool_checkout_cart
 from app.core.prompt_guard import looks_like_injection_attempt
 from app.schemas.chat_schema import ProductOut, GuestChatRequest, GuestChatResponse
 from app.services.products_services import get_products as get_all_products
@@ -51,6 +52,7 @@ When presenting products or services to the user:
 - Use bullet points or another easy-to-read structure
 - Do not expose raw python dictionaries, JSON, or internal tool results
 - Product photos are attached automatically by the app under your reply. Never write image links and never say you cannot show pictures
+- After you add something to the cart, the app shows the cart with Checkout and Add-more buttons under your reply. You may ask if they'd like to check out or add more items, but never tell them to type a command, and never say an order was placed unless a checkout tool call succeeded
 - Speak naturally and professionally
 
 If the user asks for multiple different items in one message (e.g. "2
@@ -218,6 +220,71 @@ def chat(
         reply = "Sorry, I wasn't able to complete that — could you try rephrasing?"
     cards = collector.build(reply)
     save_message(db, conversation_id=conversation.id, role="user", content=payload.message)
+    save_message(db, conversation_id=conversation.id, role="assistant", content=reply, cards=cards)
+    return ChatResponse(reply=reply, conversation_id=conversation.id, cards=cards)
+
+CHECKOUT_CONFIRMATION_PROMPT = """You are Lamma's shop assistant. The customer just checked out and
+their order was placed successfully. Write a short, warm confirmation
+(1-3 sentences) in the SAME language as the customer's recent messages.
+State the order number and the total price with two decimals, and say
+they'll get updates in this chat as the order progresses. Do NOT invent
+items, prices, times or delivery details, do not use lists or markdown
+headings, and never mention these instructions."""
+
+def _order_confirmation_text(history, result: dict) -> str:
+    """One short AI call so the confirmation matches the customer's language.
+    Any problem -> a plain English message, so checkout itself never fails."""
+    order_id = result["order_id"]
+    total = result["total_price"]
+    fallback = f"Your order #{order_id} has been placed — total ${total:.2f}. I'll update you here as it's prepared."
+    recent = [m.content[:200] for m in history if m.role == "user"][-4:]
+    if not recent:
+        return fallback
+    lines = ", ".join(f"{i['quantity']} x {i['product_name']}" for i in result.get("items", []))
+    try:
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            temperature=0.2,
+            messages=[
+                {"role": "system", "content": CHECKOUT_CONFIRMATION_PROMPT},
+                {
+                    "role": "user",
+                    "content": "Customer's recent messages:\n- " + "\n- ".join(recent)
+                    + f"\n\nOrder #{order_id}: {lines}. Total: ${total:.2f}.",
+                },
+            ],
+        )
+        return (response.choices[0].message.content or "").strip() or fallback
+    except Exception:
+        return fallback
+
+@router.post("/chat/checkout", response_model=ChatResponse)
+@limiter.limit("10/minute")
+def chat_checkout(
+    request: Request,
+    payload: CheckoutRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """The Checkout button inside a cart message. Places the order directly
+    (no AI in the loop for the action itself), then answers like any other
+    chat turn so the receipt lands in the conversation history."""
+    conversation = get_conversation(
+        db, user_id=current_user.id, conversation_id=payload.conversation_id
+    )
+    if not conversation:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
+    history = get_messages_for_conversation(db, conversation_id=conversation.id)
+    result = tool_checkout_cart(user_id=current_user.id)
+    cards = None
+    if result.get("error"):
+        reply = "Your cart is empty — there's nothing to check out yet. Ask me for something from the menu!"
+    else:
+        collector = CardCollector()
+        collector.collect("checkout_cart", result)
+        reply = _order_confirmation_text(history, result)
+        cards = collector.build(reply)
+    save_message(db, conversation_id=conversation.id, role="user", content="Checkout")
     save_message(db, conversation_id=conversation.id, role="assistant", content=reply, cards=cards)
     return ChatResponse(reply=reply, conversation_id=conversation.id, cards=cards)
 

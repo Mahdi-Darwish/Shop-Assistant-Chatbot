@@ -2,7 +2,7 @@ from app.database import SessionLocal
 from app.services.image_services import is_valid_image_url
 from app.services.products_services import (create_product,delete_product,get_products,search_product_by_name,update_product,)
 from app.services.user_services import (delete_user,all_users as get_all_users,search_users_by_username, set_user_active_status,)
-from app.services.order_services import update_order_status
+from app.services.order_services import update_order_status_and_notify
 from app.services.order_services import get_all_orders
 from app.services.user_services import get_user_by_id
 
@@ -179,35 +179,11 @@ def tool_list_orders(status: str | None = None):
     finally:
         db.close()
 def tool_update_order_status(order_id: int, new_status: str):
-    from app.services.chat_services import (
-        create_conversation,
-        get_conversations_by_user,
-        save_message,
-    )
-    valid_statuses = {
-        "pending", "preparing", "ready",
-        "out_for_delivery", "delivered", "cancelled",
-    }
-    if new_status not in valid_statuses:
-        return {"error": f"Status must be one of: {', '.join(valid_statuses)}."}
-    STATUS_MESSAGES = {
-        "pending": "has been received and is pending",
-        "preparing": "is now being prepared",
-        "ready": "is ready for pickup",
-        "out_for_delivery": "is on its way to you",
-        "delivered": "has been delivered",
-        "cancelled": "has been cancelled",
-    }
     db = SessionLocal()
     try:
-        order = update_order_status(db, order_id=order_id, new_status=new_status)
-        if not order:
-            return {"error": f"No order found with id {order_id}."}
-        # Notify the customer about the status change of their order
-        conversations = get_conversations_by_user(db, user_id=order.user_id)
-        conversation = conversations[0] if conversations else create_conversation(db, user_id=order.user_id)
-        notification = f"Update: your order #{order.id} {STATUS_MESSAGES[new_status]}."
-        save_message(db, conversation_id=conversation.id, role="assistant", content=notification)
+        order, error = update_order_status_and_notify(db, order_id=order_id, new_status=new_status)
+        if error:
+            return {"error": error}
         return {"message": f"Order #{order.id} marked as '{order.status}'. Customer notified."}
     finally:
         db.close()

@@ -1,10 +1,16 @@
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from sqlalchemy.orm import Session
 from app.core.rate_limit import limiter
 from app.dependencies import get_db, require_admin
 from app.models.user_model import User
 from app.schemas.product_shcema import ProductSchema as ProductOut, ProductCreate,ProductUpdate
+from app.schemas.order_schema import AdminOrderItemOut, AdminOrderOut, OrderStatusUpdate
 from app.schemas.user_schema import UserOut
+from app.services.order_services import (
+    get_order_with_customer,
+    get_orders_with_customers,
+    update_order_status_and_notify,
+)
 from app.services.image_services import save_product_image
 from app.services.products_services import (
     create_product,
@@ -183,3 +189,56 @@ def remove_product(
         )
         raise HTTPException(status_code=code, detail=message)
     return {"message": message}
+
+#orders (live board in the admin dashboard)
+def _order_out(order, user) -> AdminOrderOut:
+    items = []
+    for oi in sorted(order.items, key=lambda i: i.id):
+        product = oi.product
+        items.append(
+            AdminOrderItemOut(
+                product_name=product.name if product else "(removed item)",
+                quantity=oi.quantity,
+                unit_price=oi.price_at_purchase,
+                subtotal=oi.price_at_purchase * oi.quantity,
+                image_url=product.image_url if product else None,
+            )
+        )
+    return AdminOrderOut(
+        id=order.id,
+        username=user.username,
+        phone=user.phone,
+        status=order.status,
+        total_price=order.total_price,
+        created_at=order.created_at,
+        items=items,
+    )
+
+@router.get("/orders", response_model=list[AdminOrderOut])
+@limiter.limit("120/minute")
+def list_orders_admin(
+    request: Request,
+    limit: int = Query(200, ge=1, le=500),
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    """Newest first. The dashboard polls this every few seconds so new
+    orders appear without the admin having to ask the chatbot."""
+    return [_order_out(order, user) for order, user in get_orders_with_customers(db, limit=limit)]
+
+@router.patch("/orders/{order_id}/status", response_model=AdminOrderOut)
+@limiter.limit("60/minute")
+def set_order_status_admin(
+    request: Request,
+    order_id: int,
+    payload: OrderStatusUpdate,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    order, error = update_order_status_and_notify(db, order_id=order_id, new_status=payload.status)
+    if error:
+        code = status.HTTP_404_NOT_FOUND if error.startswith("No order") else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=code, detail=error)
+    row = get_order_with_customer(db, order_id)
+    return _order_out(*row)
+

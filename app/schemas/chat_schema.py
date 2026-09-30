@@ -8,6 +8,9 @@ class ChatRequest(BaseModel):
     # through POST /admin/uploads/product-image.
     image_url: str | None = None
 
+class CheckoutRequest(BaseModel):
+    conversation_id: int
+
 class ChatResponse(BaseModel):
     reply: str
     conversation_id: int

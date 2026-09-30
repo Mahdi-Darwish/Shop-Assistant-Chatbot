@@ -99,6 +99,13 @@ class CardCollector:
         if tool_name in PRODUCT_LIST_TOOLS and isinstance(result, list):
             for p in result:
                 self._add_product(p, specific=(tool_name == "search_product_by_name"))
+        elif tool_name == "add_to_cart" and isinstance(result, dict) and (result.get("cart") or {}).get("items"):
+            cart = result["cart"]
+            self._cart = {
+                "kind": "cart",
+                "items": [_cart_item(i) for i in cart["items"]],
+                "total": cart.get("total"),
+            }
         elif tool_name in SINGLE_PRODUCT_TOOLS and isinstance(result, dict):
             self._add_product(result.get("product"), specific=True)
         elif tool_name == "view_cart" and isinstance(result, dict):
