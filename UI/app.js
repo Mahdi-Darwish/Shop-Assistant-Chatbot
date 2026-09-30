@@ -60,18 +60,6 @@ function TypingIndicator() {
 }
 
 /* ---------------------------------------------------------
-   Detects a "added X to your cart" style confirmation in an
-   assistant reply so we can surface quick-action buttons
-   (Checkout / Add another item) right inside the message.
-   --------------------------------------------------------- */
-function parseCartConfirmation(text) {
-  if (!text) return null;
-  const plain = text.replace(/\*\*/g, "");
-  const match = plain.match(/added\s+(.+?)\s+to\s+(?:your|the)\s+cart/i);
-  return match ? match[1].trim() : null;
-}
-
-/* ---------------------------------------------------------
    Lightweight formatter for assistant replies. The LLM often
    writes back **bold** labels and "- " bulleted lists — this
    turns that raw markdown into real emphasis and a cleanly
@@ -166,7 +154,7 @@ function HeroArt() {
 /* ---------------------------------------------------------
    Nav
    --------------------------------------------------------- */
-function Nav({ isAuthed, isAdmin, onLogin, onSignup, onLogout }) {
+function Nav({ isAuthed, isAdmin, onLogin, onSignup, onLogout, onDashboard }) {
   return (
     <div className="nav">
       <div className="nav-inner">
@@ -185,6 +173,9 @@ function Nav({ isAuthed, isAdmin, onLogin, onSignup, onLogout }) {
           {isAuthed ? (
             <div className="account-pill">
               {isAdmin && <span className="admin-tag">Admin</span>}
+              {isAdmin && onDashboard && (
+                <button className="btn btn-solid" onClick={onDashboard}>Dashboard</button>
+              )}
               <button className="btn btn-ghost" onClick={onLogout}>Log out</button>
             </div>
           ) : (
@@ -565,8 +556,8 @@ function AuthModal({ mode, onClose, onAuthenticated, onSwitchMode }) {
 /* ---------------------------------------------------------
    Chat widget — guest (read-only) or authenticated (full)
    --------------------------------------------------------- */
-function ChatWidget({ token, isAdmin, onRequireAuth, openSignal }) {
-  const [open, setOpen] = useState(false);
+function ChatWidget({ token, isAdmin, onRequireAuth, openSignal, embedded = false }) {
+  const [open, setOpen] = useState(embedded);
   const [guestMessages, setGuestMessages] = useState([]);
   const [conversations, setConversations] = useState([]);
   const [activeId, setActiveId] = useState(null);
@@ -723,28 +714,44 @@ function ChatWidget({ token, isAdmin, onRequireAuth, openSignal }) {
     sendMessage(text);
   }
 
-  // Used by the in-message quick-action buttons (Checkout / Add another item)
-  function quickSend(text) {
-    sendMessage(text);
+  /* Checkout button inside a cart message: the server places the order
+     directly, then the receipt (with photos) lands in the chat. */
+  async function handleCheckout() {
+    if (sending || !activeId) return;
+    setSending(true);
+    setMessages((prev) => [...prev, { role: "user", content: "Checkout" }]);
+    try {
+      const response = await authedFetch("/chat/checkout", {
+        method: "POST",
+        body: JSON.stringify({ conversation_id: activeId }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : "Something went wrong.");
+      setMessages((prev) => [...prev, { role: "assistant", content: data.reply, cards: data.cards }]);
+    } catch (err) {
+      setMessages((prev) => [...prev, { role: "assistant", content: `Sorry — ${err.message}` }]);
+    } finally {
+      setSending(false);
+    }
   }
 
   const activeMessages = token ? messages : guestMessages;
 
   return (
     <>
-      {!open && (
+      {!open && !embedded && (
         <button className="chat-launcher" onClick={() => setOpen(true)} aria-label="Open chat">
           <ChatBubbleIcon />
         </button>
       )}
 
       {open && (
-        <div className="chat-panel">
+        <div className={`chat-panel${embedded ? " embedded" : ""}`}>
           <div className="chat-panel-header">
             <div className="who">
               <MarkIcon />
               <div className="who-text">
-                <span className="who-name">Ask Lamma</span>
+                <span className="who-name">{isAdmin ? "Admin assistant" : "Ask Lamma"}</span>
                 <span className="who-status">
                   <span className="status-dot" aria-hidden="true"></span>
                   Responds within a second
@@ -766,7 +773,9 @@ function ChatWidget({ token, isAdmin, onRequireAuth, openSignal }) {
               {token && (
                 <button className="chat-panel-close" onClick={handleNewChat} aria-label="New chat" title="New chat">+</button>
               )}
-              <button className="chat-panel-close" onClick={() => setOpen(false)} aria-label="Close chat"><CloseIcon /></button>
+              {!embedded && (
+                <button className="chat-panel-close" onClick={() => setOpen(false)} aria-label="Close chat"><CloseIcon /></button>
+              )}
             </div>
           </div>
 
@@ -780,11 +789,17 @@ function ChatWidget({ token, isAdmin, onRequireAuth, openSignal }) {
           <div className="chat-messages">
             {activeMessages.length === 0 && (
               <div className="chat-empty">
-                {token ? "Ask about your order, or what's good today." : "Ask what's on the menu, what's fresh, or for a recommendation."}
+                {token
+                  ? isAdmin
+                    ? "Add, edit or delete products and users — just tell me what to do. Use the paperclip to attach a product photo."
+                    : "Ask about your order, or what's good today."
+                  : "Ask what's on the menu, what's fresh, or for a recommendation."}
               </div>
             )}
             {activeMessages.map((m, i) => {
-              const cartItem = m.role === "assistant" ? parseCartConfirmation(m.content) : null;
+              const showCartActions =
+                !!token && !isAdmin && m.role === "assistant" &&
+                m.cards?.cart?.kind === "cart" && i === activeMessages.length - 1;
               return (
                 <div key={i} className={`msg-row ${m.role}`}>
                   <div className="msg-bubble" dir="auto">
@@ -796,12 +811,13 @@ function ChatWidget({ token, isAdmin, onRequireAuth, openSignal }) {
                     {m.role === "assistant" && m.cards?.products?.length > 0 && (
                       <ProductCards products={m.cards.products} />
                     )}
-                    {cartItem && (
+                    {showCartActions && (
                       <div className="msg-actions">
                         <button
                           type="button"
                           className="msg-action-btn primary"
-                          onClick={() => quickSend("Checkout")}
+                          onClick={handleCheckout}
+                          disabled={sending}
                         >
                           <CartIcon />
                           Checkout
@@ -809,9 +825,10 @@ function ChatWidget({ token, isAdmin, onRequireAuth, openSignal }) {
                         <button
                           type="button"
                           className="msg-action-btn"
-                          onClick={() => quickSend("I'd like to add another item")}
+                          onClick={() => sendMessage("I'd like to add more items. What's on the menu?")}
+                          disabled={sending}
                         >
-                          Add another item
+                          Add more items
                         </button>
                       </div>
                     )}
@@ -867,7 +884,7 @@ function ChatWidget({ token, isAdmin, onRequireAuth, openSignal }) {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               dir="auto"
-              placeholder={token ? "Ask about your order…" : "Ask about the menu…"}
+              placeholder={token ? (isAdmin ? "e.g. Add Cheesecake for $4 with this photo…" : "Ask about your order…") : "Ask about the menu…"}
               disabled={sending}
             />
             <button type="submit" disabled={sending || !input.trim()}>Send</button>
@@ -879,6 +896,278 @@ function ChatWidget({ token, isAdmin, onRequireAuth, openSignal }) {
 }
 
 /* ---------------------------------------------------------
+   Admin dashboard — sidebar + live incoming orders
+   --------------------------------------------------------- */
+const STATUS_LABEL = {
+  pending: "New",
+  preparing: "Preparing",
+  ready: "Ready",
+  out_for_delivery: "Out for delivery",
+  delivered: "Delivered",
+  cancelled: "Cancelled",
+};
+const ACTIVE_STATUSES = ["pending", "preparing", "ready", "out_for_delivery"];
+/* What the admin can do next from each status: [newStatus, button label, primary?] */
+const ORDER_ACTIONS = {
+  pending: [["preparing", "Start preparing", true]],
+  preparing: [["ready", "Mark ready", true]],
+  ready: [["out_for_delivery", "Out for delivery", false], ["delivered", "Delivered", true]],
+  out_for_delivery: [["delivered", "Mark delivered", true]],
+};
+
+function timeAgo(iso) {
+  if (!iso) return "";
+  const secs = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
+  if (secs < 60) return "just now";
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins} min ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} h ago`;
+  return new Date(iso).toLocaleDateString();
+}
+
+function OrderCard({ order, onStatus }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const actions = ORDER_ACTIONS[order.status] || [];
+  const canCancel = ACTIVE_STATUSES.includes(order.status);
+
+  async function change(status) {
+    if (status === "cancelled" && !window.confirm(`Cancel order #${order.id}? The customer will be notified.`)) return;
+    setBusy(true);
+    setError("");
+    try {
+      await onStatus(order.id, status);
+    } catch (err) {
+      setError(err.message || "Could not update the order.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className={`order-card status-${order.status}`}>
+      <div className="order-head">
+        <div className="order-head-main">
+          <span className="order-id">Order #{order.id}</span>
+          <span className={`order-pill ${order.status}`}>{STATUS_LABEL[order.status] || order.status}</span>
+        </div>
+        <span className="order-time" title={order.created_at ? new Date(order.created_at).toLocaleString() : ""}>
+          {timeAgo(order.created_at)}
+        </span>
+      </div>
+      <div className="order-customer">
+        <strong>{order.username}</strong>
+        {order.phone && <a href={`tel:${order.phone}`}>{order.phone}</a>}
+      </div>
+      <div className="order-items">
+        {order.items.map((it, i) => (
+          <div className="order-item" key={i}>
+            <img
+              src={productImageSrc({ name: it.product_name, image_url: it.image_url }, 120)}
+              alt={it.product_name}
+              loading="lazy"
+              decoding="async"
+            />
+            <div className="order-item-info">
+              <span className="order-item-name">{it.product_name}</span>
+              <span className="order-item-qty">{it.quantity} × {money(it.unit_price)}</span>
+            </div>
+            <span className="order-item-sub">{money(it.subtotal)}</span>
+          </div>
+        ))}
+      </div>
+      <div className="order-foot">
+        <span className="order-total">Total {money(order.total_price)}</span>
+        <div className="order-actions">
+          {actions.map(([status, label, primary]) => (
+            <button
+              key={status}
+              type="button"
+              className={`msg-action-btn${primary ? " primary" : ""}`}
+              disabled={busy}
+              onClick={() => change(status)}
+            >
+              {label}
+            </button>
+          ))}
+          {canCancel && (
+            <button type="button" className="msg-action-btn danger" disabled={busy} onClick={() => change("cancelled")}>
+              Cancel
+            </button>
+          )}
+        </div>
+      </div>
+      {error && <div className="order-error">{error}</div>}
+    </div>
+  );
+}
+
+function OrdersBoard({ orders, connError, onStatus }) {
+  const [filter, setFilter] = useState("active");
+
+  if (orders === null) {
+    return <div className="orders-empty">{connError ? "Couldn't load orders — retrying…" : "Loading orders…"}</div>;
+  }
+  const active = orders.filter((o) => ACTIVE_STATUSES.includes(o.status));
+  const done = orders.filter((o) => !ACTIVE_STATUSES.includes(o.status));
+  const shown = filter === "active" ? active : filter === "done" ? done : orders;
+
+  return (
+    <>
+      <div className="orders-tabs">
+        {[["active", "Active", active.length], ["done", "Completed", done.length], ["all", "All", orders.length]].map(
+          ([key, label, count]) => (
+            <button
+              key={key}
+              type="button"
+              className={`orders-tab${filter === key ? " active" : ""}`}
+              onClick={() => setFilter(key)}
+            >
+              {label} <span>{count}</span>
+            </button>
+          )
+        )}
+        <span className={`orders-live${connError ? " offline" : ""}`}>
+          <span className="orders-live-dot" aria-hidden="true"></span>
+          {connError ? "Reconnecting…" : "Live"}
+        </span>
+      </div>
+      {shown.length === 0 ? (
+        <div className="orders-empty">
+          {filter === "active" ? "No active orders right now. New orders will appear here automatically." : "Nothing here yet."}
+        </div>
+      ) : (
+        <div className="orders-list">
+          {shown.map((o) => <OrderCard key={o.id} order={o} onStatus={onStatus} />)}
+        </div>
+      )}
+    </>
+  );
+}
+
+function AdminDashboard({ token, onLogout, onViewSite }) {
+  const [section, setSection] = useState("orders");
+  const [orders, setOrders] = useState(null); // null until the first load
+  const [connError, setConnError] = useState(false);
+  const [toast, setToast] = useState(null);
+  const knownIds = useRef(null);
+
+  /* Poll for orders every 8s so new ones appear without asking the chatbot.
+     Paused while the tab is hidden, refreshed the moment it's visible again. */
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      if (document.hidden) return;
+      try {
+        const response = await fetch(`${API_BASE}/admin/orders`, { headers: { Authorization: `Bearer ${token}` } });
+        if (response.status === 401) { onLogout(); return; }
+        if (!response.ok) throw new Error("bad status");
+        const data = await response.json();
+        if (cancelled) return;
+        if (knownIds.current) {
+          const fresh = data.filter((o) => !knownIds.current.has(o.id));
+          if (fresh.length) {
+            setToast(fresh.length === 1 ? `New order #${fresh[0].id} from ${fresh[0].username}` : `${fresh.length} new orders`);
+          }
+        }
+        knownIds.current = new Set(data.map((o) => o.id));
+        setOrders(data);
+        setConnError(false);
+      } catch {
+        if (!cancelled) setConnError(true);
+      }
+    }
+    load();
+    const timer = setInterval(load, 8000);
+    const onVisible = () => { if (!document.hidden) load(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [token]);
+
+  useEffect(() => {
+    if (!toast) return undefined;
+    const t = setTimeout(() => setToast(null), 7000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  const pending = orders ? orders.filter((o) => o.status === "pending").length : 0;
+
+  useEffect(() => {
+    const original = document.title;
+    document.title = pending > 0 ? `(${pending}) New orders · Lamma` : original;
+    return () => { document.title = original; };
+  }, [pending]);
+
+  async function changeStatus(orderId, status) {
+    const response = await fetch(`${API_BASE}/admin/orders/${orderId}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ status }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : "Could not update the order.");
+    setOrders((prev) => (prev ? prev.map((o) => (o.id === data.id ? data : o)) : prev));
+  }
+
+  return (
+    <div className="dash">
+      <aside className="dash-sidebar">
+        <div className="dash-brand">
+          <MarkIcon />
+          <span className="dash-brand-name">Lamma</span>
+          <span className="admin-tag">Admin</span>
+        </div>
+        <nav className="dash-nav">
+          <button
+            type="button"
+            className={`dash-nav-item${section === "orders" ? " active" : ""}`}
+            onClick={() => setSection("orders")}
+          >
+            <span className="dash-nav-title">
+              Incoming orders
+              {pending > 0 && <span className="dash-badge">{pending}</span>}
+            </span>
+            <span className="dash-nav-sub">Updates automatically</span>
+          </button>
+          <button
+            type="button"
+            className={`dash-nav-item${section === "assistant" ? " active" : ""}`}
+            onClick={() => setSection("assistant")}
+          >
+            <span className="dash-nav-title">Menu &amp; users</span>
+            <span className="dash-nav-sub">Add, edit or delete with the assistant</span>
+          </button>
+        </nav>
+        <div className="dash-foot">
+          <button type="button" className="dash-foot-btn" onClick={onViewSite}>View website</button>
+          <button type="button" className="dash-foot-btn" onClick={onLogout}>Log out</button>
+        </div>
+      </aside>
+
+      <main className="dash-main">
+        {toast && (
+          <button type="button" className="dash-toast" onClick={() => { setSection("orders"); setToast(null); }}>
+            🔔 {toast}
+          </button>
+        )}
+        <section className="dash-section" style={{ display: section === "orders" ? "block" : "none" }}>
+          <h1 className="dash-title">Incoming orders</h1>
+          <OrdersBoard orders={orders} connError={connError} onStatus={changeStatus} />
+        </section>
+        <section className="dash-section chat" style={{ display: section === "assistant" ? "block" : "none" }}>
+          <ChatWidget token={token} isAdmin={true} embedded={true} onRequireAuth={() => {}} openSignal={0} />
+        </section>
+      </main>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------
    App
    --------------------------------------------------------- */
 function App() {
@@ -886,6 +1175,7 @@ function App() {
   const [role, setRole] = useState(null);
   const [authModal, setAuthModal] = useState(null); // null | "login" | "signup"
   const [chatOpenSignal, setChatOpenSignal] = useState(0);
+  const [adminView, setAdminView] = useState("dashboard"); // admins land on the dashboard
 
   useEffect(() => {
     if (!token) { setRole(null); return; }
@@ -906,6 +1196,17 @@ function App() {
     localStorage.removeItem("shop_token");
     setToken(null);
     setRole(null);
+    setAdminView("dashboard");
+  }
+
+  if (token && role === "admin" && adminView === "dashboard") {
+    return (
+      <AdminDashboard
+        token={token}
+        onLogout={handleLogout}
+        onViewSite={() => setAdminView("site")}
+      />
+    );
   }
 
   return (
@@ -916,6 +1217,7 @@ function App() {
         onLogin={() => setAuthModal("login")}
         onSignup={() => setAuthModal("signup")}
         onLogout={handleLogout}
+        onDashboard={() => setAdminView("dashboard")}
       />
       <Hero onOpenChat={() => setChatOpenSignal((n) => n + 1)} onSignup={() => setAuthModal("signup")} />
       <MenuPreview />
