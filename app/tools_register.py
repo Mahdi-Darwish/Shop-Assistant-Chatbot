@@ -1,5 +1,5 @@
 from app.tools.products_tools import(tool_get_products,tool_search_product_by_name,tool_get_products_by_min_price,tool_get_products_by_max_price)
-from app.tools.cart_tools import(tool_add_to_cart,tool_remove_from_cart,tool_view_cart,tool_checkout_cart,tool_clear_cart)
+from app.tools.cart_tools import(tool_add_to_cart,tool_remove_from_cart,tool_view_cart,tool_clear_cart)
 from app.tools.order_tools import (tool_get_order_status,tool_get_user_orders)
 from app.tools.admin_tools import (tool_activate_user,tool_add_product,tool_deactivate_user,tool_delete_user,tool_list_products, tool_list_users, tool_remove_product, tool_update_product,tool_list_orders,tool_update_order_status)
 available_tools ={
@@ -10,7 +10,6 @@ available_tools ={
     'add_to_cart':tool_add_to_cart,
     'remove_from_cart':tool_remove_from_cart,
     'view_cart':tool_view_cart,
-    'checkout_cart':tool_checkout_cart,
     'get_order_status':tool_get_order_status,
     'get_user_orders':tool_get_user_orders,
     'clear_cart':tool_clear_cart,
@@ -20,7 +19,6 @@ USER_SCOPED_TOOLS = {
     "add_to_cart",
     "remove_from_cart",
     "view_cart",
-    "checkout_cart",
     "get_order_status",
     "get_user_orders",
     "clear_cart",

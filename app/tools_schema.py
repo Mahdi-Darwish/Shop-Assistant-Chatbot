@@ -130,20 +130,6 @@ tools = [
     {
         "type": "function",
         "function": {
-            "name": "checkout_cart",
-            "description": (
-                "Place an order from everything currently in the current "
-                "user's active cart."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {},
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
             "name": "get_order_status",
             "description": (
                 "Look up the status and total of one of the current user's "

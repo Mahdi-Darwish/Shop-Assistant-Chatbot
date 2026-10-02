@@ -1,4 +1,5 @@
 import json
+import re
 from openai import OpenAI
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from openai import OpenAI
@@ -19,6 +20,24 @@ from app.services.products_services import get_products as get_all_products
 from app.services.chat_cards import CardCollector, load_cards, strip_image_urls
 
 router = APIRouter(tags=["chat"])
+
+_SMALLTALK = {
+    "ok", "okay", "k", "great", "perfect", "nice", "cool", "awesome", "good", "alright", "bye", "goodbye",
+    "hi", "hello", "hey", "salut", "bonjour", "bonsoir", "merci", "مرحبا", "اهلا", "أهلا", "تمام", "اوكي",
+    "أوكي", "حسنا", "حسناً", "مرسي", "يسلمو", "تسلم", "يعطيك العافية",
+}
+_THANKS_START = {"thanks", "thank", "thx", "ty", "merci", "شكرا", "شكراً", "شكر"}
+
+
+def is_smalltalk(text: str) -> bool:
+    """True for pure thanks / greetings. Those get an answer with NO tools, so
+    the AI can never 'redo' an earlier request (add to cart, order…) on them."""
+    t = re.sub(r"[^\w\s]", "", (text or "").lower()).strip()
+    t = re.sub(r"\s+", " ", t)
+    if not t:
+        return False
+    words = t.split(" ")
+    return t in _SMALLTALK or (len(words) <= 4 and words[0] in _THANKS_START)
 SYSTEM_PROMPT = """You are a helpful shop assistant for Lamma, a coffee and dessert shop.
 LANGUAGE:
 - Always reply in the same language the user's most recent message is
@@ -52,8 +71,20 @@ When presenting products or services to the user:
 - Use bullet points or another easy-to-read structure
 - Do not expose raw python dictionaries, JSON, or internal tool results
 - Product photos are attached automatically by the app under your reply. Never write image links and never say you cannot show pictures
-- After you add something to the cart, the app shows the cart with Checkout and Add-more buttons under your reply. You may ask if they'd like to check out or add more items, but never tell them to type a command, and never say an order was placed unless a checkout tool call succeeded
+- After you add something to the cart, the app shows the cart with Checkout and Add-more buttons under your reply. You may ask if they'd like to check out or add more items, but never tell them to type a command
 - Speak naturally and professionally
+
+ORDERS AND ACTIONS:
+- You CANNOT place orders. The customer places an order by pressing the
+  Checkout button the app shows under their cart. If they ask to check
+  out or confirm their order, show their cart (view_cart) and tell them
+  to press the Checkout button. Never say an order was placed or
+  confirmed — the app confirms orders itself.
+- Act ONLY on the customer's latest message. Never repeat or redo
+  something from earlier in the conversation (adding items, ordering)
+  unless the latest message clearly asks for it again.
+- If the latest message is only thanks, a greeting or small talk, reply
+  briefly and warmly in their language, and do not use any tools.
 
 If the user asks for multiple different items in one message (e.g. "2
 cheesecakes and one espresso"), call the relevant tool separately once
@@ -186,17 +217,18 @@ def chat(
 
     reply = None
     collector = CardCollector()
+    smalltalk = is_smalltalk(payload.message)
     for _ in range(MAX_TOOL_ROUNDS):
         response = client.chat.completions.create(
            model=MODEL_NAME,
-           tools=all_tools,
            messages=messages,
-           temperature=0.2,)
+           temperature=0.2,
+           **({} if smalltalk else {"tools": all_tools}),)
         
         message = response.choices[0].message
 
-        if not message.tool_calls:
-            reply = message.content
+        if smalltalk or not message.tool_calls:
+            reply = message.content   # (a thank-you never runs tools, even if the model tried to)
             break
         messages.append(message)
 
@@ -204,6 +236,8 @@ def chat(
             tool_name = tool_call.function.name
             try:
                 args = json.loads(tool_call.function.arguments)
+                if tool_name == "checkout_cart":
+                    raise PermissionError("You cannot place orders. Tell the customer to press the Checkout button under their cart.")
                 function = available_tools[tool_name]
 
                 if tool_name in USER_SCOPED_TOOLS:
