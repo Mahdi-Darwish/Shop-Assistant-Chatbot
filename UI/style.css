@@ -274,7 +274,7 @@ img, svg { display: block; max-width: 100%; }
 .hero-art {
   position: relative;
   width: 100%;
-  max-width: 420px;
+  max-width: 310px;   /* was 420px — smaller photo card */
   margin: 0 auto;
   animation: hero-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
@@ -1089,7 +1089,7 @@ img, svg { display: block; max-width: 100%; }
 @media (min-width: 1600px) {
   .site { max-width: 1360px; }
   .hero { gap: 64px; padding: 108px 0 116px; }
-  .hero-art { max-width: 480px; }
+  .hero-art { max-width: 360px; }
   .chat-panel { width: 420px; height: 620px; }
 }
 
@@ -1102,14 +1102,14 @@ img, svg { display: block; max-width: 100%; }
 @media (max-width: 1024px) and (min-width: 881px) {
   .site { padding: 0 28px; }
   .hero { gap: 34px; }
-  .hero-art { max-width: 360px; }
+  .hero-art { max-width: 270px; }
   .menu-grid { gap: 18px; }
 }
 
 /* Tablets (iPad portrait, etc.) */
 @media (max-width: 880px) {
   .hero { grid-template-columns: 1fr; padding: 56px 0 64px; text-align: left; }
-  .hero-art { order: -1; max-width: 300px; margin: 0 auto 28px; }
+  .hero-art { order: -1; max-width: 230px; margin: 0 auto 28px; }
   .menu-grid { grid-template-columns: repeat(2, 1fr); }
   .menu-grid .menu-card:nth-child(2n) { --masonry-y: 0px; }
   .story-inner { grid-template-columns: 1fr; gap: 32px; }
@@ -1122,7 +1122,7 @@ img, svg { display: block; max-width: 100%; }
   .nav-links { display: none; }
   .menu-grid { grid-template-columns: 1fr; }
   .hero { padding: 40px 0 48px; }
-  .hero-art { max-width: 260px; margin: 0 auto 24px; }
+  .hero-art { max-width: 200px; margin: 0 auto 24px; }
   .hero-actions { flex-wrap: wrap; row-gap: 14px; }
 
   .chat-panel {
@@ -1156,7 +1156,7 @@ img, svg { display: block; max-width: 100%; }
   .hero-copy p { font-size: 1rem; }
   .hero-actions { gap: 14px 18px; }
   .hero-actions .btn { padding: 12px 20px; font-size: 0.95rem; }
-  .hero-art { max-width: 220px; }
+  .hero-art { max-width: 170px; }
   .hero-photo-card { left: -6%; bottom: -7%; }
 
   .section-head { flex-direction: column; align-items: flex-start; gap: 10px; }
@@ -1615,4 +1615,256 @@ img, svg { display: block; max-width: 100%; }
   .orders-list { grid-template-columns: 1fr; }
   .chat-panel.embedded .msg-bubble { max-width: 88%; }
   .dash-toast { right: 12px; left: 12px; top: 10px; text-align: left; }
+}
+
+/* Red dot on the chat button when a new message (e.g. an order update) arrives */
+.chat-launcher .chat-unread-dot {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--wine);
+  border: 2px solid var(--card);
+  z-index: 2;
+  animation: badge-pulse 1.8s ease-in-out infinite;
+}
+
+/* ============================================================
+   Opening animation (logo comes forward out of the dark)
+   ============================================================ */
+html.intro-pending body { background: var(--ink); }
+html.intro-pending,
+html.intro-pending body,
+body.intro-lock { overflow: hidden; }
+
+.intro {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  cursor: pointer;
+  /* failsafe: even if the script stalls, the overlay can never stay on screen */
+  animation: intro-failsafe 0.01s linear 4.5s forwards;
+}
+.intro-leave {
+  animation: intro-fade 0.75s ease-in forwards, intro-failsafe 0.01s linear 4.5s forwards;
+}
+@keyframes intro-fade { from { opacity: 1; } to { opacity: 0; } }
+@keyframes intro-failsafe { to { opacity: 0; visibility: hidden; pointer-events: none; } }
+
+.intro-glow {
+  position: absolute;
+  width: min(80vw, 760px);
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(199, 161, 89, 0.34) 0%, rgba(199, 161, 89, 0.1) 40%, transparent 70%);
+  opacity: 0;
+  transform: scale(0.3);
+  animation: intro-glow-in 1.7s cubic-bezier(0.2, 0.8, 0.2, 1) 0.1s forwards;
+}
+@keyframes intro-glow-in {
+  0%   { opacity: 0; transform: scale(0.3); }
+  60%  { opacity: 1; transform: scale(1); }
+  100% { opacity: 0.55; transform: scale(1.15); }
+}
+
+.intro-logo {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: var(--gold);
+  opacity: 0;
+  transform: scale(0.25);
+  will-change: transform, opacity, filter;
+  animation: intro-logo-in 1.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+.intro-leave .intro-logo {
+  animation: intro-logo-out 0.75s cubic-bezier(0.55, 0, 0.9, 0.4) forwards;
+}
+
+/* comes forward from far away: small + blurred + dim → big, sharp, bright */
+@keyframes intro-logo-in {
+  0%   { opacity: 0; transform: scale(0.25); filter: blur(14px) brightness(0.5); }
+  55%  { opacity: 1; transform: scale(1);    filter: blur(0) brightness(1.6) drop-shadow(0 0 26px rgba(199, 161, 89, 0.9)); }
+  100% { opacity: 1; transform: scale(1.06); filter: blur(0) brightness(1.15) drop-shadow(0 0 16px rgba(199, 161, 89, 0.45)); }
+}
+/* then flies past the camera as the page opens */
+@keyframes intro-logo-out {
+  from { opacity: 1; transform: scale(1.06); filter: brightness(1.15); }
+  to   { opacity: 0; transform: scale(2.6);  filter: blur(8px) brightness(1.5); }
+}
+
+.intro-mark { width: clamp(46px, 7vw, 74px); height: clamp(46px, 7vw, 74px); }
+.intro-ar {
+  font-family: var(--font-arabic);
+  font-size: clamp(5.2rem, 17vw, 10.5rem);
+  line-height: 1;
+}
+.intro-en {
+  font-family: var(--font-display);
+  font-size: clamp(1rem, 2.4vw, 1.5rem);
+  font-weight: 600;
+  color: var(--cream-text);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  opacity: 0;
+  animation: intro-en-in 1.2s ease 0.55s forwards;
+}
+@keyframes intro-en-in {
+  from { opacity: 0; letter-spacing: 0.1em; }
+  to   { opacity: 0.95; letter-spacing: 0.5em; }
+}
+
+/* ============================================================
+   Polished motion — added on top of the original design
+   ============================================================ */
+/* nav tightens + gets a soft shadow once you scroll */
+.nav { transition: box-shadow 0.35s ease; }
+.nav-inner { transition: padding 0.35s ease; }
+.nav.scrolled { box-shadow: 0 8px 28px rgba(29, 20, 13, 0.1); }
+.nav.scrolled .nav-inner { padding-top: 11px; padding-bottom: 11px; }
+
+@keyframes reveal-failsafe { to { opacity: var(--fo, 1); transform: none; clip-path: inset(0 -60px -60px -60px); } }
+@keyframes card-failsafe { to { opacity: 1; scale: 1; } }
+
+/* hero headline: words rise out of a mask once the intro opens */
+.wd { display: inline-block; overflow: hidden; vertical-align: top; padding-bottom: 0.12em; margin-bottom: -0.12em; }
+.wd > span {
+  display: inline-block;
+  transform: translateY(112%);
+  transition: transform 1.05s cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: reveal-failsafe 0.01s linear 5s forwards;
+}
+html.intro-done .wd > span { transform: none; }
+
+.hero-mark, .hero-copy p, .hero-actions {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.9s ease, transform 0.9s cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: reveal-failsafe 0.01s linear 5s forwards;
+}
+.hero-copy p { --fo: 0.82; }
+html.intro-done .hero-mark { opacity: 1; transform: none; transition-delay: 0.05s; }
+html.intro-done .hero-copy p { opacity: 0.82; transform: none; transition-delay: 0.6s; }
+html.intro-done .hero-actions { opacity: 1; transform: none; transition-delay: 0.8s; }
+
+/* hero photos: the arch is unveiled top-to-bottom, the baklava circle pops in; both drift with mouse + scroll */
+.hero-art { animation: none; }
+.par {
+  translate: calc(var(--mx, 0) * var(--k, 1) * -9px) calc(var(--my, 0) * var(--k, 1) * -7px + var(--sp, 0) * var(--k, 1) * -34px);
+  transition: translate 0.7s cubic-bezier(0.2, 0.7, 0.2, 1);
+  will-change: translate;
+}
+.par-card { position: absolute; inset: 0; pointer-events: none; }
+.hero-photo-main {
+  clip-path: inset(0 -60px 100% -60px);
+  transition: clip-path 1.5s cubic-bezier(0.77, 0, 0.18, 1) 0.3s;
+  animation: reveal-failsafe 0.01s linear 5s forwards;
+}
+html.intro-done .hero-photo-main { clip-path: inset(0 -60px -60px -60px); }
+.hero-photo-card {
+  opacity: 0;
+  scale: 0.8;
+  animation: card-float 4.5s ease-in-out infinite, card-failsafe 0.01s linear 5s forwards;
+}
+html.intro-done .hero-photo-card {
+  opacity: 1;
+  scale: 1;
+  transition: opacity 1s ease 1s, scale 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) 1s;
+}
+
+/* primary buttons: a soft light sweep on hover */
+.btn-solid { overflow: hidden; }
+.btn-solid::after {
+  content: "";
+  position: absolute;
+  top: 0; bottom: 0; left: 0;
+  width: 60%;
+  background: linear-gradient(105deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transform: translateX(-140%) skewX(-18deg);
+  pointer-events: none;
+}
+.btn-solid:hover::after { transform: translateX(260%) skewX(-18deg); transition: transform 0.9s cubic-bezier(0.2, 0.8, 0.2, 1); }
+
+/* scroll reveal + a gold rule that draws under section titles */
+.reveal {
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 0.9s ease, transform 0.9s cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: reveal-failsafe 0.01s linear 8s forwards;
+}
+.reveal.in { opacity: 1; transform: none; }
+.section-head h2 { position: relative; padding-bottom: 14px; }
+.section-head h2::after {
+  content: "";
+  position: absolute;
+  left: 0; bottom: 0;
+  height: 2px; width: 0;
+  background: var(--gold);
+  transition: width 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) 0.35s;
+}
+.section-head.in h2::after { width: 64px; }
+
+/* chat: messages glide in, cart rows stagger, receipt gets an animated check */
+.msg-row { animation: msg-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes msg-in { from { opacity: 0; transform: translateY(12px) scale(0.98); } to { opacity: 1; transform: none; } }
+.chat-cart-row { animation: row-in 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; animation-delay: calc(var(--i, 0) * 80ms + 0.15s); }
+@keyframes row-in { from { opacity: 0; transform: translateX(-14px); } to { opacity: 1; transform: none; } }
+.order-check { display: inline-block; vertical-align: -5px; margin-right: 8px; width: 22px; height: 22px; }
+.order-check circle { fill: none; stroke: var(--emerald); stroke-width: 2; stroke-dasharray: 63; stroke-dashoffset: 63; animation: check-draw 0.7s ease 0.2s forwards; }
+.order-check path { fill: none; stroke: var(--emerald); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 20; stroke-dashoffset: 20; animation: check-draw 0.45s ease 0.8s forwards; }
+@keyframes check-draw { to { stroke-dashoffset: 0; } }
+
+/* the gold bag in the chat header + the tongs that fill it */
+.chat-bag {
+  position: relative;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px;
+  border: 0; border-radius: 50%;
+  background: rgba(246, 239, 221, 0.1);
+  color: var(--gold);
+  padding: 0;
+  transition: background 0.2s ease;
+}
+.chat-bag:hover:not(:disabled) { background: rgba(246, 239, 221, 0.2); }
+.chat-bag svg { width: 19px; height: 19px; }
+.chat-bag-count {
+  position: absolute; top: -5px; right: -5px;
+  min-width: 18px; height: 18px; padding: 0 5px;
+  border-radius: 9px;
+  background: var(--wine); color: var(--cream-text);
+  font-size: 0.68rem; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  animation: badge-pop 0.5s cubic-bezier(0.2, 1.6, 0.4, 1);
+}
+@keyframes badge-pop { 0% { transform: scale(0.2); } 60% { transform: scale(1.35); } 100% { transform: scale(1); } }
+.tong-fly { position: fixed; z-index: 300; width: 84px; height: 116px; pointer-events: none; transform-origin: 50% 69%; will-change: transform, opacity; }
+.tong-fly svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.tong-item {
+  position: absolute;
+  left: calc(50% - 18px); top: calc(69% - 18px);
+  width: 36px; height: 36px;
+  border-radius: 50%; object-fit: cover;
+  border: 2px solid #f1d896;
+  box-shadow: 0 4px 10px rgba(29, 20, 13, 0.35);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wd > span, .hero-mark, .hero-copy p, .hero-actions, .reveal { transform: none; transition: none; animation: none; }
+  .wd > span, .hero-mark, .hero-actions, .reveal { opacity: 1; }
+  .hero-copy p { opacity: 0.82; }
+  .par { translate: none; transition: none; }
+  .hero-photo-main { clip-path: none; transition: none; animation: none; }
+  .hero-photo-card { opacity: 1; scale: 1; }
+  .section-head h2::after { width: 64px; transition: none; }
+  .msg-row, .chat-cart-row, .chat-bag-count { animation: none; }
+  .order-check circle, .order-check path { animation: none; stroke-dashoffset: 0; }
 }

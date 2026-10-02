@@ -114,6 +114,7 @@ function MessageContent({ text }) {
 function HeroArt() {
   return (
     <div className="hero-art">
+      <div className="par" style={{ "--k": 1 }}>
       <div className="hero-photo hero-photo-main">
         <img
           src="https://images.unsplash.com/photo-1506778020041-0ea35027d019?auto=format&fit=crop&w=3840&q=90"
@@ -133,6 +134,8 @@ function HeroArt() {
           <span></span>
         </div>
       </div>
+      </div>
+      <div className="par par-card" style={{ "--k": 2.2 }}>
       <div className="hero-photo hero-photo-card">
         <img
           src="https://images.unsplash.com/photo-1651507265947-06cbb2283901?auto=format&fit=crop&w=2400&q=90"
@@ -147,6 +150,7 @@ function HeroArt() {
           decoding="async"
         />
       </div>
+      </div>
     </div>
   );
 }
@@ -155,8 +159,15 @@ function HeroArt() {
    Nav
    --------------------------------------------------------- */
 function Nav({ isAuthed, isAdmin, onLogin, onSignup, onLogout, onDashboard }) {
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const on = () => setScrolled(window.scrollY > 24);
+    on();
+    window.addEventListener("scroll", on, { passive: true });
+    return () => window.removeEventListener("scroll", on);
+  }, []);
   return (
-    <div className="nav">
+    <div className={`nav${scrolled ? " scrolled" : ""}`}>
       <div className="nav-inner">
         <a className="wordmark" href="#top">
           <MarkIcon />
@@ -191,15 +202,227 @@ function Nav({ isAuthed, isAdmin, onLogin, onSignup, onLogout, onDashboard }) {
 }
 
 /* ---------------------------------------------------------
+   Opening animation — the logo comes forward out of the dark,
+   glowing, then zooms past the camera and the page opens.
+   Plays once per browser tab; tap/click skips it; skipped entirely
+   for people who asked their device for reduced motion.
+   --------------------------------------------------------- */
+const INTRO_KEY = "lamma_intro_seen";
+
+function prefersReducedMotion() {
+  return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+}
+
+function shouldPlayIntro() {
+  if (prefersReducedMotion()) return false;
+  try {
+    return !sessionStorage.getItem(INTRO_KEY);
+  } catch {
+    return true;
+  }
+}
+
+function Intro() {
+  const [phase, setPhase] = useState(() => (shouldPlayIntro() ? "play" : "done"));
+
+  function finish() {
+    try { sessionStorage.setItem(INTRO_KEY, "1"); } catch { /* private mode: it just plays again */ }
+    setPhase("done");
+  }
+
+  // timeline: logo comes forward (0–1.5s) → zooms through + overlay fades (1.9–2.6s)
+  useEffect(() => {
+    if (!shouldPlayIntro()) return undefined;
+    const leave = setTimeout(() => setPhase((p) => (p === "play" ? "leave" : p)), 1900);
+    const done = setTimeout(finish, 2650);
+    return () => { clearTimeout(leave); clearTimeout(done); };
+  }, []);
+
+  // page state: lock scrolling while it plays; the hero drinks start flying in as the overlay fades
+  useEffect(() => {
+    const body = document.body;
+    const html = document.documentElement;
+    if (phase === "done") {
+      body.classList.remove("intro-lock");
+      html.classList.remove("intro-pending");
+    } else {
+      body.classList.add("intro-lock");
+    }
+    if (phase !== "play") html.classList.add("intro-done");
+  }, [phase]);
+
+  // if the page switches away mid-intro (e.g. an admin account opening the dashboard), never leave it locked
+  useEffect(() => () => {
+    document.body.classList.remove("intro-lock");
+    document.documentElement.classList.remove("intro-pending");
+  }, []);
+
+  if (phase === "done") return null;
+  return (
+    <div className={`intro intro-${phase}`} aria-hidden="true" onClick={finish}>
+      <div className="intro-glow"></div>
+      <div className="intro-logo">
+        <MarkIcon className="intro-mark" />
+        <span className="intro-ar" lang="ar" dir="rtl">لمّة</span>
+        <span className="intro-en">Lamma</span>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------
+   Scroll reveal — fades/rises into view once, when first seen
+   --------------------------------------------------------- */
+function Reveal({ className = "", delay = 0, children }) {
+  const ref = useRef(null);
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    if (prefersReducedMotion() || !("IntersectionObserver" in window)) { setShown(true); return undefined; }
+    const io = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) { setShown(true); io.disconnect(); }
+    }, { threshold: 0.15 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  return (
+    <div ref={ref} className={`reveal${shown ? " in" : ""} ${className}`} style={{ transitionDelay: `${delay}ms` }}>
+      {children}
+    </div>
+  );
+}
+
+const BagIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <path d="M5.5 8.5h13l-1 11h-11l-1-11z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+    <path d="M9 8.5V7a3 3 0 0 1 6 0v1.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+  </svg>
+);
+
+/* ---------------------------------------------------------
+   Gold tongs pick the item up from the cart and drop it in the bag
+   in the chat header (WAAPI, ~1.5s). Pure decoration: the cart
+   itself is already updated by the server.
+   --------------------------------------------------------- */
+const TONG_ARM = "M40 6 C37 6 35.5 9 36.5 13 C37 32 29 52 21.5 76 C20.5 80 22 84 26 85 C30 86 32.5 83 33.6 79.5 C40 58 44.5 34 44 13 C44 9 43 6 40 6 Z";
+const TONGS_SVG = `<svg viewBox="0 0 80 110" aria-hidden="true"><defs><linearGradient id="tgd" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#8a6a2f"/><stop offset=".45" stop-color="#f1d896"/><stop offset=".7" stop-color="#c9a45c"/><stop offset="1" stop-color="#7d5f28"/></linearGradient><filter id="tgs" x="-30%" y="-10%" width="160%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="2.2" flood-color="#1d140d" flood-opacity=".35"/></filter></defs><g filter="url(#tgs)"><g class="ta-l" style="transform-origin:40px 14px"><path fill="url(#tgd)" d="${TONG_ARM}"/></g><g class="ta-r" style="transform-origin:40px 14px"><path fill="url(#tgd)" transform="translate(80 0) scale(-1 1)" d="${TONG_ARM}"/></g><path d="M33 10 C33 2 47 2 47 10" fill="none" stroke="url(#tgd)" stroke-width="3.2" stroke-linecap="round"/><circle cx="40" cy="14" r="3.6" fill="#f6e3b0" stroke="#8a6a2f" stroke-width="1.2"/></g></svg>`;
+
+function bumpBag(bag) {
+  if (bag && bag.animate) {
+    bag.animate(
+      [{ transform: "scale(1)" }, { transform: "scale(1.24)" }, { transform: "scale(.94)" }, { transform: "scale(1)" }],
+      { duration: 480, easing: "ease-out" }
+    );
+  }
+}
+
+function flyTongs(imgEl, bagEl, onArrive) {
+  const a = imgEl.getBoundingClientRect();
+  const b = bagEl.getBoundingClientRect();
+  const s = 84 / 80;                                   // graphic is 84px wide for an 80-unit viewBox
+  const cx = a.left + a.width / 2, cy = a.top + a.height / 2;
+  const dx = b.left + b.width / 2 - cx, dy = b.top + b.height / 2 - 2 - cy;
+
+  const wrap = document.createElement("div");
+  wrap.className = "tong-fly";
+  wrap.style.left = `${cx - 40 * s}px`;
+  wrap.style.top = `${cy - 76 * s}px`;
+  const item = document.createElement("img");
+  item.className = "tong-item";
+  item.alt = "";
+  item.src = imgEl.currentSrc || imgEl.src;
+  wrap.appendChild(item);
+  wrap.insertAdjacentHTML("beforeend", TONGS_SVG);
+  document.body.appendChild(wrap);
+  const prevOpacity = imgEl.style.opacity;
+  imgEl.style.transition = "opacity .3s";
+  imgEl.style.opacity = "0.12";                        // "picked up" from the cart row
+
+  const T = 1500, ease = "cubic-bezier(.4,0,.2,1)";
+  if (wrap.animate) {
+    const at = (o, tf, extra = {}) => ({ offset: o, transform: tf, ...extra });
+    wrap.animate([
+      at(0, "translate(0,0) scale(.85)", { opacity: 0 }),
+      at(0.13, "translate(0,0) scale(1)", { opacity: 1, easing: ease }),
+      at(0.45, `translate(${dx * 0.55}px,${dy * 0.35 - 10}px) rotate(-10deg) scale(1.06)`, { opacity: 1, easing: ease }),
+      at(0.73, `translate(${dx}px,${dy}px) rotate(5deg) scale(.82)`, { opacity: 1 }),
+      at(0.86, `translate(${dx}px,${dy}px) rotate(5deg) scale(.82)`, { opacity: 1, easing: ease }),
+      at(1, `translate(${dx}px,${dy - 24}px) rotate(5deg) scale(.7)`, { opacity: 0 }),
+    ], { duration: T, fill: "forwards" });
+    const arm = (sg) => [
+      at(0, `rotate(${sg * 22}deg)`), at(0.13, `rotate(${sg * 8.5}deg)`, { easing: ease }),
+      at(0.73, `rotate(${sg * 8.5}deg)`), at(0.83, `rotate(${sg * 22}deg)`, { easing: ease }), at(1, `rotate(${sg * 22}deg)`),
+    ];
+    wrap.querySelector(".ta-l").animate(arm(1), { duration: T, fill: "forwards" });   // open → grip → release
+    wrap.querySelector(".ta-r").animate(arm(-1), { duration: T, fill: "forwards" });
+    item.animate([
+      { offset: 0, opacity: 1, transform: "none" }, { offset: 0.73, opacity: 1, transform: "none" },
+      { offset: 0.86, opacity: 0, transform: "translateY(16px) scale(.35)", easing: ease },
+      { offset: 1, opacity: 0, transform: "translateY(16px) scale(.35)" },
+    ], { duration: T, fill: "forwards" });
+  }
+  setTimeout(() => { if (onArrive) onArrive(); }, T * 0.78);                           // it lands in the bag
+  setTimeout(() => { imgEl.style.opacity = prevOpacity || ""; }, T * 0.8);
+  setTimeout(() => wrap.remove(), T + 80);
+}
+
+/* ---------------------------------------------------------
    Hero
    --------------------------------------------------------- */
+const HERO_WORDS = ["Coffee", "is", "better", "shared."];
+
 function Hero({ onOpenChat, onSignup }) {
+  const sectionRef = useRef(null);
+
+  /* gentle mouse + scroll parallax on the photos (set as CSS variables on the hero) */
+  useEffect(() => {
+    const hero = sectionRef.current;
+    if (!hero || prefersReducedMotion()) return undefined;
+    let raf = 0;
+    let mx = 0, my = 0, sp = 0;
+    function apply() {
+      raf = 0;
+      hero.style.setProperty("--mx", mx.toFixed(3));
+      hero.style.setProperty("--my", my.toFixed(3));
+      hero.style.setProperty("--sp", sp.toFixed(3));
+    }
+    const schedule = () => { if (!raf) raf = requestAnimationFrame(apply); };
+    function onScroll() {
+      const r = hero.getBoundingClientRect();
+      sp = Math.min(1, Math.max(0, -r.top / Math.max(r.height, 1)));
+      schedule();
+    }
+    function onMove(e) {
+      const r = hero.getBoundingClientRect();
+      if (r.bottom < 0 || r.height === 0) return;
+      mx = Math.max(-1, Math.min(1, ((e.clientX - r.left) / r.width) * 2 - 1));
+      my = Math.max(-1, Math.min(1, ((e.clientY - r.top) / r.height) * 2 - 1));
+      schedule();
+    }
+    const hasMouse = !!(window.matchMedia && window.matchMedia("(hover: hover) and (pointer: fine)").matches);
+    if (hasMouse) window.addEventListener("mousemove", onMove, { passive: true });
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("scroll", onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, []);
+
   return (
-    <div className="hero-section lattice">
+    <div className="hero-section lattice" ref={sectionRef}>
       <div className="site hero" id="top">
         <div className="hero-copy">
           <span className="hero-mark" lang="ar" dir="rtl">لمّة</span>
-          <h1>Coffee is better shared.</h1>
+          <h1 aria-label="Coffee is better shared.">
+            {HERO_WORDS.map((w, i) => (
+              <React.Fragment key={w}>
+                <span className="wd" aria-hidden="true"><span style={{ transitionDelay: `${0.15 + i * 0.1}s` }}>{w}</span></span>{" "}
+              </React.Fragment>
+            ))}
+          </h1>
           <p>
             لمّة (lamma) means gathering. Slow-poured qahwa, warm cardamom
             pastries, and a seat that's yours for as long as you want it.
@@ -288,10 +511,16 @@ function CartCard({ cart }) {
   return (
     <div className="chat-cart">
       <div className="chat-cart-title">
+        {cart.kind === "order" && (
+          <svg className="order-check" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M7 12.5l3.2 3.2L17 9" />
+          </svg>
+        )}
         {cart.kind === "order" ? `Order #${cart.order_id}` : "Your cart"}
       </div>
       {cart.items.map((it, i) => (
-        <div className="chat-cart-row" key={i}>
+        <div className="chat-cart-row" key={i} data-cart-name={it.name} style={{ "--i": i }}>
           <img src={productImageSrc({ name: it.name, image_url: it.image_url }, 160)} alt={it.name} loading="lazy" decoding="async" />
           <div className="chat-cart-info">
             <span className="chat-cart-name">{it.name}</span>
@@ -342,10 +571,10 @@ function MenuPreview() {
 
   return (
     <div className="site menu-section" id="menu">
-      <div className="section-head">
+      <Reveal className="section-head">
         <h2>On the counter today</h2>
         <p>Made fresh, served warm, and made for sharing. Welcome to لمّة.</p>
-      </div>
+      </Reveal>
       <div ref={gridRef} className={`menu-grid ${inView ? "in-view" : ""}`}>
         {error && <div className="menu-error">Couldn't load the menu right now — try asking the assistant instead.</div>}
         {!error && products === null && <div className="menu-empty">Menu's brewing — one moment.</div>}
@@ -556,6 +785,11 @@ function AuthModal({ mode, onClose, onAuthenticated, onSwitchMode }) {
 /* ---------------------------------------------------------
    Chat widget — guest (read-only) or authenticated (full)
    --------------------------------------------------------- */
+/* "Fingerprint" of the newest message. The history endpoint only returns the
+   last 20 messages, so counting them would miss updates in long chats. */
+const lastMessageSig = (list) =>
+  list && list.length ? `${list[list.length - 1].role}|${list[list.length - 1].content}` : "";
+
 function ChatWidget({ token, isAdmin, onRequireAuth, openSignal, embedded = false }) {
   const [open, setOpen] = useState(embedded);
   const [guestMessages, setGuestMessages] = useState([]);
@@ -567,12 +801,36 @@ function ChatWidget({ token, isAdmin, onRequireAuth, openSignal, embedded = fals
   const [pendingImage, setPendingImage] = useState(null); // admin: { url, preview }
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
+  const [unread, setUnread] = useState(false); // new assistant message arrived while the chat was closed
   const fileInputRef = useRef(null);
   const scrollRef = useRef(null);
+  const serverSig = useRef("");   // newest message as the server last told us
+  const openRef = useRef(open);
+  const sendingRef = useRef(false);
+  openRef.current = open;
+  sendingRef.current = sending;
+
+  /* the bag in the header counts what's in the customer's cart (from the latest cart card) */
+  let cartCount = 0;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const c = messages[i].cards && messages[i].cards.cart;
+    if (c) { cartCount = c.kind === "cart" ? c.items.reduce((n, it) => n + (it.quantity || 0), 0) : 0; break; }
+  }
+  const [held, setHeld] = useState(null);           // while the tongs carry an item, the bag keeps showing the OLD count
+  const shownCount = held !== null ? held : cartCount;
+  const [fly, setFly] = useState(null);
+  const bagRef = useRef(null);
+  const cartSnap = useRef({});                       // name → quantity, to know what was just added
+  const cartCountRef = useRef(0);
+  cartCountRef.current = cartCount;
 
   useEffect(() => {
     if (openSignal > 0) setOpen(true);
   }, [openSignal]);
+
+  useEffect(() => {
+    if (open) setUnread(false);
+  }, [open]);
 
   const basePath = isAdmin ? "/admin" : "";
 
@@ -601,6 +859,14 @@ function ChatWidget({ token, isAdmin, onRequireAuth, openSignal, embedded = fals
   async function loadMessages(conversationId) {
     const response = await authedFetch(`${basePath}/conversations/${conversationId}/messages`);
     const data = await response.json();
+    serverSig.current = response.ok ? lastMessageSig(data) : "";
+    cartSnap.current = {};
+    if (response.ok) {
+      for (let i = data.length - 1; i >= 0; i--) {
+        const c = data[i].cards && data[i].cards.cart;
+        if (c) { if (c.kind === "cart") c.items.forEach((it) => { cartSnap.current[it.name] = it.quantity; }); break; }
+      }
+    }
     setMessages(response.ok ? data : []);
   }
 
@@ -620,6 +886,78 @@ function ChatWidget({ token, isAdmin, onRequireAuth, openSignal, embedded = fals
   useEffect(() => {
     if (token && activeId) loadMessages(activeId);
   }, [activeId, token]);
+
+  useEffect(() => {
+    if (!fly) return undefined;
+    const bag = bagRef.current;
+    if (prefersReducedMotion() || !bag) { setHeld(null); return undefined; }
+    const timers = [];
+    timers.push(setTimeout(() => {                    // give the new message a moment to scroll into view
+      const rows = [...document.querySelectorAll(".chat-messages .chat-cart-row")];
+      let launched = 0;
+      fly.names.slice(0, 3).forEach((name) => {
+        const row = rows.filter((r) => r.dataset.cartName === name).pop();
+        const img = row && row.querySelector("img");
+        if (!img) return;
+        timers.push(setTimeout(() => flyTongs(img, bag, () => { setHeld(null); bumpBag(bag); }), launched * 450));
+        launched++;
+      });
+      if (!launched) { setHeld(null); return; }
+      timers.push(setTimeout(() => setHeld(null), 1300 + launched * 450));   // safety: never leave the old number stuck
+    }, 450));
+    return () => timers.forEach(clearTimeout);
+  }, [fly]);
+
+  /* Customers: find their latest conversation on page load (without creating
+     one) so order updates can be picked up even before the chat is opened. */
+  useEffect(() => {
+    if (!token || isAdmin) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await authedFetch("/conversations");
+        if (!response.ok || cancelled) return;
+        const data = await response.json();
+        if (!cancelled && data.length > 0) {
+          setConversations(data);
+          setActiveId((current) => current ?? data[0].id);
+        }
+      } catch { /* the chat still works normally when opened */ }
+    })();
+    return () => { cancelled = true; };
+  }, [token, isAdmin]);
+
+  /* Live updates: every 8s (and the moment the tab becomes visible) check the
+     conversation for new messages — e.g. "your order is being prepared" sent
+     by the admin — so the customer never has to refresh. Never runs while a
+     message is being sent, so it can't overwrite what's on screen. */
+  useEffect(() => {
+    if (!token || isAdmin || !activeId) return undefined;
+    let cancelled = false;
+    async function poll() {
+      if (document.hidden || sendingRef.current) return;
+      try {
+        const response = await authedFetch(`/conversations/${activeId}/messages`);
+        if (!response.ok || cancelled || sendingRef.current) return;
+        const data = await response.json();
+        const sig = lastMessageSig(data);
+        if (cancelled || sig === serverSig.current) return;
+        serverSig.current = sig;
+        setMessages(data);
+        if (!openRef.current && data.length > 0 && data[data.length - 1].role === "assistant") {
+          setUnread(true);
+        }
+      } catch { /* try again on the next tick */ }
+    }
+    const timer = setInterval(poll, 8000);
+    const onVisible = () => { if (!document.hidden) poll(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [token, isAdmin, activeId]);
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -695,7 +1033,9 @@ function ChatWidget({ token, isAdmin, onRequireAuth, openSignal, embedded = fals
       });
       const data = await response.json();
       if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : "Something went wrong.");
+      noteCart(data.cards);   // first: the bag must know the tongs are coming before the message re-renders it
       setMessages((prev) => [...prev, { role: "assistant", content: data.reply, cards: data.cards }]);
+      serverSig.current = `assistant|${data.reply}`;
       // Keep the attachment until a product was actually saved with it, so the
       // admin can answer a follow-up question ("what's the price?") without re-attaching.
       if (attached && data.image_used) setPendingImage(null);
@@ -714,6 +1054,22 @@ function ChatWidget({ token, isAdmin, onRequireAuth, openSignal, embedded = fals
     sendMessage(text);
   }
 
+  /* Which items did this reply just add? → the tongs carry them to the bag. */
+  function noteCart(cards) {
+    const cart = cards && cards.cart;
+    if (!cart) return;
+    if (cart.kind === "order") { cartSnap.current = {}; return; }
+    const prevTotal = Object.values(cartSnap.current).reduce((n, q) => n + q, 0);
+    const next = {};
+    const added = [];
+    cart.items.forEach((it) => {
+      next[it.name] = it.quantity;
+      if (it.quantity > (cartSnap.current[it.name] || 0)) added.push(it.name);
+    });
+    cartSnap.current = next;
+    if (added.length) { setHeld(prevTotal); setFly({ id: Date.now(), names: added }); }
+  }
+
   /* Checkout button inside a cart message: the server places the order
      directly, then the receipt (with photos) lands in the chat. */
   async function handleCheckout() {
@@ -727,7 +1083,9 @@ function ChatWidget({ token, isAdmin, onRequireAuth, openSignal, embedded = fals
       });
       const data = await response.json();
       if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : "Something went wrong.");
+      noteCart(data.cards);   // first: the bag must know the tongs are coming before the message re-renders it
       setMessages((prev) => [...prev, { role: "assistant", content: data.reply, cards: data.cards }]);
+      serverSig.current = `assistant|${data.reply}`;
     } catch (err) {
       setMessages((prev) => [...prev, { role: "assistant", content: `Sorry — ${err.message}` }]);
     } finally {
@@ -740,8 +1098,13 @@ function ChatWidget({ token, isAdmin, onRequireAuth, openSignal, embedded = fals
   return (
     <>
       {!open && !embedded && (
-        <button className="chat-launcher" onClick={() => setOpen(true)} aria-label="Open chat">
+        <button
+          className="chat-launcher"
+          onClick={() => setOpen(true)}
+          aria-label={unread ? "Open chat — new message" : "Open chat"}
+        >
           <ChatBubbleIcon />
+          {unread && <span className="chat-unread-dot" aria-hidden="true"></span>}
         </button>
       )}
 
@@ -759,6 +1122,20 @@ function ChatWidget({ token, isAdmin, onRequireAuth, openSignal, embedded = fals
               </div>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {token && !isAdmin && (
+                <button
+                  type="button"
+                  className="chat-bag"
+                  ref={bagRef}
+                  onClick={() => sendMessage("Show my cart")}
+                  disabled={sending}
+                  aria-label={`Your cart, ${shownCount} item${shownCount === 1 ? "" : "s"}`}
+                  title="Your cart"
+                >
+                  <BagIcon />
+                  {shownCount > 0 && <span key={shownCount} className="chat-bag-count">{shownCount}</span>}
+                </button>
+              )}
               {token && conversations.length > 0 && (
                 <select
                   className="chat-history-select"
@@ -1211,6 +1588,7 @@ function App() {
 
   return (
     <>
+      <Intro />
       <Nav
         isAuthed={!!token}
         isAdmin={role === "admin"}
