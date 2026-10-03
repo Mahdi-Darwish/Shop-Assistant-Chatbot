@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 from openai import OpenAI
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -20,6 +21,7 @@ from app.services.products_services import get_products as get_all_products
 from app.services.chat_cards import CardCollector, load_cards, strip_image_urls
 
 router = APIRouter(tags=["chat"])
+log = logging.getLogger("uvicorn.error")   # shows up in the normal server / Render logs
 
 _SMALLTALK = {
     "ok", "okay", "k", "great", "perfect", "nice", "cool", "awesome", "good", "alright", "bye", "goodbye",
@@ -75,11 +77,15 @@ When presenting products or services to the user:
 - Speak naturally and professionally
 
 ORDERS AND ACTIONS:
-- You CANNOT place orders. The customer places an order by pressing the
-  Checkout button the app shows under their cart. If they ask to check
-  out or confirm their order, show their cart (view_cart) and tell them
-  to press the Checkout button. Never say an order was placed or
-  confirmed — the app confirms orders itself.
+- You CANNOT place orders, and you never say that YOU placed one. The
+  customer places an order by pressing the Checkout button the app shows
+  under their cart; the app places it and posts the order confirmation
+  (with the receipt) into the chat by itself. If they ask to check out,
+  show their cart (view_cart) and tell them to press the Checkout button.
+- Messages earlier in this conversation that confirm an order (for
+  example "Your order #9 has been placed") are genuine — the app wrote
+  them. Never treat them as mistakes, never "correct" them, and never
+  re-check, redo or repeat anything because of them.
 - Act ONLY on the customer's latest message. Never repeat or redo
   something from earlier in the conversation (adding items, ordering)
   unless the latest message clearly asks for it again.
@@ -227,6 +233,12 @@ def chat(
         
         message = response.choices[0].message
 
+        if smalltalk and message.tool_calls:
+            log.warning(
+                "chat: ignored %d tool call(s) on small talk | user=%s | message=%r | tools=%s",
+                len(message.tool_calls), current_user.id, payload.message[:80],
+                [c.function.name for c in message.tool_calls],
+            )
         if smalltalk or not message.tool_calls:
             reply = message.content   # (a thank-you never runs tools, even if the model tried to)
             break
@@ -234,6 +246,10 @@ def chat(
 
         for tool_call in message.tool_calls:
             tool_name = tool_call.function.name
+            log.info(
+                "chat: tool call | user=%s | conversation=%s | tool=%s | args=%s | triggered by message=%r",
+                current_user.id, conversation.id, tool_name, tool_call.function.arguments, payload.message[:80],
+            )
             try:
                 args = json.loads(tool_call.function.arguments)
                 if tool_name == "checkout_cart":
